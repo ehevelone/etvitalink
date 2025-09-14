@@ -1,5 +1,5 @@
 [functions]
-  directory = "vitalink-backend/functions"
+  directory = "functions"
   node_bundler = "esbuild"
 
 [build.environment]
