@@ -5,7 +5,7 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
-    // ✅ Get raw body text and parse manually (safer than req.json())
+    // ✅ Get raw body text and parse manually
     const raw = await req.text();
     let body = {};
     try {
@@ -13,6 +13,9 @@ export default async (req) => {
     } catch {
       console.error("Invalid JSON body:", raw);
     }
+
+    // 🔎 Debug log incoming request
+    console.log("Incoming request body:", body);
 
     // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
@@ -24,6 +27,7 @@ export default async (req) => {
         image_url: `data:image/png;base64,${body.imageBase64}`,
       };
     } else {
+      console.error("No image provided in request body");
       return new Response(
         JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -57,6 +61,9 @@ export default async (req) => {
     // ✅ Parse AI response
     const parsed = JSON.parse(response.choices[0].message.content);
 
+    // 🔎 Debug log AI response
+    console.log("AI Parsed Response:", parsed);
+
     return new Response(
       JSON.stringify({
         version: "v3-json-strict",
@@ -68,10 +75,3 @@ export default async (req) => {
     console.error("Parse-label error:", err);
     return new Response(
       JSON.stringify({
-        error: err.message,
-        details: err.response?.data || null,
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-};
