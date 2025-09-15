@@ -1,11 +1,14 @@
 import OpenAI from "openai";
 
+// Initialize OpenAI client
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
+    // Parse request body
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
+    // Decide how to handle input
     let imageInput;
     if (body.imageUrl) {
       imageInput = { type: "image_url", image_url: body.imageUrl };
@@ -15,12 +18,13 @@ export default async (req) => {
         image_url: `data:image/png;base64,${body.imageBase64}`,
       };
     } else {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
-      };
+      return new Response(
+        JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
+    // Call OpenAI Vision model
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini", // Vision-capable model
       messages: [
@@ -40,27 +44,29 @@ export default async (req) => {
           ],
         },
       ],
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }, // Ensures strict JSON
       max_tokens: 500,
     });
 
+    // Parse OpenAI response
     const parsed = JSON.parse(response.choices[0].message.content);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
+    // Return clean JSON to client
+    return new Response(
+      JSON.stringify({
         version: "v3-json-strict",
         data: parsed,
       }),
-    };
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
     console.error("Parse-label error:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
+    return new Response(
+      JSON.stringify({
         error: err.message,
         details: err.response?.data || null,
       }),
-    };
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 };
