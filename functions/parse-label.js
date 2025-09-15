@@ -5,10 +5,16 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
-    // Parse request body
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // ✅ Get raw body text and parse manually (safer than req.json())
+    const raw = await req.text();
+    let body = {};
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      console.error("Invalid JSON body:", raw);
+    }
 
-    // Decide how to handle input
+    // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
     if (body.imageUrl) {
       imageInput = { type: "image_url", image_url: body.imageUrl };
@@ -24,7 +30,7 @@ export default async (req) => {
       );
     }
 
-    // Call OpenAI Vision model
+    // ✅ Call OpenAI Vision
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini", // Vision-capable model
       messages: [
@@ -44,14 +50,13 @@ export default async (req) => {
           ],
         },
       ],
-      response_format: { type: "json_object" }, // Ensures strict JSON
+      response_format: { type: "json_object" }, // strict JSON
       max_tokens: 500,
     });
 
-    // Parse OpenAI response
+    // ✅ Parse AI response
     const parsed = JSON.parse(response.choices[0].message.content);
 
-    // Return clean JSON to client
     return new Response(
       JSON.stringify({
         version: "v3-json-strict",
