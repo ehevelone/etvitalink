@@ -5,7 +5,7 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
-    // ✅ Get raw body text and parse manually
+    // ✅ Parse body safely
     const raw = await req.text();
     let body = {};
     try {
@@ -17,14 +17,13 @@ export default async (req) => {
     // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
     if (body.imageUrl) {
-      imageInput = { type: "image_url", image_url: body.imageUrl };
+      imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
     } else if (body.imageBase64) {
       imageInput = {
         type: "image_url",
-        image_url: `data:image/png;base64,${body.imageBase64}`,
+        image_url: { url: `data:image/png;base64,${body.imageBase64}` },
       };
     } else {
-      // 🔎 Echo back what we received
       return new Response(
         JSON.stringify({
           error: "No image provided (need imageUrl or imageBase64)",
@@ -36,7 +35,7 @@ export default async (req) => {
 
     // ✅ Call OpenAI Vision
     const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // Vision-capable model
+      model: "gpt-4.1-mini", // Vision-capable
       messages: [
         {
           role: "system",
@@ -58,7 +57,6 @@ export default async (req) => {
       max_tokens: 500,
     });
 
-    // ✅ Parse AI response
     const parsed = JSON.parse(response.choices[0].message.content);
 
     return new Response(
@@ -73,7 +71,7 @@ export default async (req) => {
     return new Response(
       JSON.stringify({
         error: err.message,
-        receivedBody: {}, // still include empty body for consistency
+        receivedBody: {},
         details: err.response?.data || null,
       }),
       { status: 500, headers: { "Content-Type": "application/json" } }
