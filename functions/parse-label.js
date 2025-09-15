@@ -14,9 +14,6 @@ export default async (req) => {
       console.error("Invalid JSON body:", raw);
     }
 
-    // 🔎 Debug log incoming request
-    console.log("Incoming request body:", body);
-
     // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
     if (body.imageUrl) {
@@ -27,9 +24,12 @@ export default async (req) => {
         image_url: `data:image/png;base64,${body.imageBase64}`,
       };
     } else {
-      console.error("No image provided in request body");
+      // 🔎 Echo back what we received
       return new Response(
-        JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
+        JSON.stringify({
+          error: "No image provided (need imageUrl or imageBase64)",
+          receivedBody: body,
+        }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -54,15 +54,12 @@ export default async (req) => {
           ],
         },
       ],
-      response_format: { type: "json_object" }, // strict JSON
+      response_format: { type: "json_object" },
       max_tokens: 500,
     });
 
     // ✅ Parse AI response
     const parsed = JSON.parse(response.choices[0].message.content);
-
-    // 🔎 Debug log AI response
-    console.log("AI Parsed Response:", parsed);
 
     return new Response(
       JSON.stringify({
@@ -75,3 +72,11 @@ export default async (req) => {
     console.error("Parse-label error:", err);
     return new Response(
       JSON.stringify({
+        error: err.message,
+        receivedBody: {}, // still include empty body for consistency
+        details: err.response?.data || null,
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+};
