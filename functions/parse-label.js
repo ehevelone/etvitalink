@@ -8,16 +8,15 @@ exports.handler = async (event) => {
     let { imageBase64, debug } = body;
     if (!imageBase64) return ok({_error:"imageBase64 is required"});
 
-    // ensure data URL form for Responses API image input
+    // Ensure data URL form for Responses API image input
     if (!/^data:image\\//i.test(imageBase64)) {
       imageBase64 = "data:image/jpeg;base64," + imageBase64;
     }
 
-    // Build a simpler, permissive request
     const req = {
       model: "gpt-4.1",
       temperature: 0,
-      response_format: { type: "json_object" }, // <-- simpler than json_schema
+      response_format: { type: "json_object" },
       input: [
         {
           role: "system",
@@ -54,11 +53,9 @@ exports.handler = async (event) => {
     const text = await resp.text();
 
     if (!resp.ok) {
-      // return full body so we can see exactly what's wrong
       return ok({_error:"OpenAI request failed", status: resp.status, details: text});
     }
 
-    // Responses API often provides output_text; fall back to content/text
     let data = {};
     try { data = JSON.parse(text); } catch {}
     const raw =
