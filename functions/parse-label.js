@@ -33,13 +33,14 @@ export default async (req, res) => {
           content: [
             {
               type: "text",
-              text: "Extract details from this medication label. Return JSON with keys: name, dose, prescribing_doctor, frequency.",
+              // 🔑 Now includes `pharmacy`
+              text: "Extract details from this medication label. Return JSON with keys: name, dose, frequency, prescribing_doctor, pharmacy.",
             },
             imageInput,
           ],
         },
       ],
-      response_format: { type: "json_object" }, // 🔒 ensures JSON
+      response_format: { type: "json_object" }, // Ensures strict JSON
       max_tokens: 500,
     });
 
