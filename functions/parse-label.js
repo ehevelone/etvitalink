@@ -1,27 +1,41 @@
 import OpenAI from "openai";
 
+// Initialize OpenAI client
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export default async (req, res) => {
+export default async (req) => {
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // ✅ Parse body safely
+    const raw = await req.text();
+    let body = {};
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      console.error("Invalid JSON body:", raw);
+    }
 
+    // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
     if (body.imageUrl) {
-      imageInput = { type: "image_url", image_url: body.imageUrl };
+      imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
     } else if (body.imageBase64) {
       imageInput = {
         type: "image_url",
-        image_url: `data:image/png;base64,${body.imageBase64}`,
+        image_url: { url: `data:image/png;base64,${body.imageBase64}` },
       };
     } else {
-      return res
-        .status(400)
-        .json({ error: "No image provided (need imageUrl or imageBase64)" });
+      return new Response(
+        JSON.stringify({
+          error: "No image provided (need imageUrl or imageBase64)",
+          receivedBody: body,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
+    // ✅ Call OpenAI Vision
     const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // Vision-capable model
+      model: "gpt-4.1-mini", // Vision-capable
       messages: [
         {
           role: "system",
@@ -33,28 +47,34 @@ export default async (req, res) => {
           content: [
             {
               type: "text",
-              // 🔑 Now includes `pharmacy`
               text: "Extract details from this medication label. Return JSON with keys: name, dose, frequency, prescribing_doctor, pharmacy.",
             },
             imageInput,
           ],
         },
       ],
-      response_format: { type: "json_object" }, // Ensures strict JSON
+      response_format: { type: "json_object" },
       max_tokens: 500,
     });
 
     const parsed = JSON.parse(response.choices[0].message.content);
 
-    return res.status(200).json({
-      version: "v3-json-strict",
-      data: parsed,
-    });
+    return new Response(
+      JSON.stringify({
+        version: "v3-json-strict",
+        data: parsed,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
-    console.error("Parse-label error:", err.response?.data || err.message);
-    return res.status(500).json({
-      error: err.message,
-      details: err.response?.data || null,
-    });
+    console.error("Parse-label error:", err);
+    return new Response(
+      JSON.stringify({
+        error: err.message,
+        receivedBody: {},
+        details: err.response?.data || null,
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 };
