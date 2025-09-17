@@ -1,20 +1,21 @@
 import OpenAI from "openai";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export default async (req) => {
   try {
+    // ✅ Get raw body safely
     const raw = await req.text();
     let body = {};
     try {
       body = JSON.parse(raw);
     } catch (e) {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body", raw }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      console.error("Invalid JSON body:", raw);
     }
 
+    // ✅ Ensure we have either imageUrl or base64
     let imageInput;
     if (body.imageUrl) {
       imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
@@ -25,24 +26,31 @@ export default async (req) => {
       };
     } else {
       return new Response(
-        JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
+        JSON.stringify({
+          error: "No image provided (need imageUrl or imageBase64)",
+        }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
+    // ✅ Call OpenAI Vision
     const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // vision-capable
+      model: "gpt-4.1-mini", // Vision-capable model
       messages: [
         {
           role: "system",
-          content:
-            "You are an assistant that extracts structured fields from insurance cards. " +
-            "Return strict JSON with keys: carrier, policy, memberId, group.",
+          content: `You are an OCR parser for insurance cards. 
+Return clean JSON with fields:
+- carrier
+- policy
+- memberId
+- group
+If unsure, leave fields blank.`,
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract the details from this insurance card." },
+            { type: "text", text: "Extract insurance policy details from this card." },
             imageInput,
           ],
         },
@@ -50,17 +58,18 @@ export default async (req) => {
       max_tokens: 500,
     });
 
-    const content = response.choices[0].message.content.trim();
+    // ✅ Parse AI response
     let parsed = {};
     try {
-      parsed = JSON.parse(content);
-    } catch {
-      parsed = { raw: content };
+      parsed = JSON.parse(response.choices[0].message.content);
+    } catch (e) {
+      parsed = { raw: response.choices[0].message.content };
     }
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: true, data: parsed }, null, 2),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
     return new Response(
       JSON.stringify({
