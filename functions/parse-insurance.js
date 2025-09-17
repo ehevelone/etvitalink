@@ -1,24 +1,22 @@
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
-    // ✅ Get raw body text
+    // ✅ Get raw body
     const raw = await req.text();
     let body = {};
     try {
       body = JSON.parse(raw);
-    } catch (e) {
+    } catch {
       return new Response(
-        JSON.stringify({ error: "Invalid JSON", raw }),
+        JSON.stringify({ error: "Invalid JSON body", received: raw }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // ✅ Ensure we have either imageUrl or imageBase64
+    // ✅ Ensure we have image input
     let imageInput;
     if (body.imageUrl) {
       imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
@@ -34,19 +32,19 @@ export default async (req) => {
       );
     }
 
-    // ✅ Ask AI to parse insurance card
+    // ✅ Call OpenAI Vision model
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini", // Vision-capable
       messages: [
         {
           role: "system",
-          content:
-            "You are an assistant that extracts structured data from insurance cards. Always respond with valid JSON.",
+          content: `You are an assistant that extracts structured insurance information from an insurance card.
+Output strictly JSON with keys: carrier, policy, memberId, group.`,
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract carrier, policy number, member ID, and group from this insurance card image." },
+            { type: "text", text: "Extract insurance info from this image." },
             imageInput,
           ],
         },
@@ -54,18 +52,19 @@ export default async (req) => {
       max_tokens: 500,
     });
 
-    // ✅ Parse AI response safely
+    // ✅ Parse AI response
+    const rawContent = response.choices[0].message.content;
     let parsed;
     try {
-      parsed = JSON.parse(response.choices[0].message.content);
-    } catch (e) {
-      parsed = { raw: response.choices[0].message.content };
+      parsed = JSON.parse(rawContent);
+    } catch {
+      parsed = { rawText: rawContent }; // fallback
     }
 
-    return new Response(
-      JSON.stringify({ data: parsed }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ data: parsed }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     return new Response(
       JSON.stringify({
