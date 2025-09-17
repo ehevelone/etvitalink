@@ -6,16 +6,19 @@ const client = new OpenAI({
 
 export default async (req) => {
   try {
-    // ✅ Get raw body safely
+    // ✅ Get raw body text
     const raw = await req.text();
     let body = {};
     try {
       body = JSON.parse(raw);
     } catch (e) {
-      console.error("Invalid JSON body:", raw);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON", raw }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    // ✅ Ensure we have either imageUrl or base64
+    // ✅ Ensure we have either imageUrl or imageBase64
     let imageInput;
     if (body.imageUrl) {
       imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
@@ -26,31 +29,24 @@ export default async (req) => {
       };
     } else {
       return new Response(
-        JSON.stringify({
-          error: "No image provided (need imageUrl or imageBase64)",
-        }),
+        JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // ✅ Call OpenAI Vision
+    // ✅ Ask AI to parse insurance card
     const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // Vision-capable model
+      model: "gpt-4.1-mini", // Vision-capable
       messages: [
         {
           role: "system",
-          content: `You are an OCR parser for insurance cards. 
-Return clean JSON with fields:
-- carrier
-- policy
-- memberId
-- group
-If unsure, leave fields blank.`,
+          content:
+            "You are an assistant that extracts structured data from insurance cards. Always respond with valid JSON.",
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract insurance policy details from this card." },
+            { type: "text", text: "Extract carrier, policy number, member ID, and group from this insurance card image." },
             imageInput,
           ],
         },
@@ -58,8 +54,8 @@ If unsure, leave fields blank.`,
       max_tokens: 500,
     });
 
-    // ✅ Parse AI response
-    let parsed = {};
+    // ✅ Parse AI response safely
+    let parsed;
     try {
       parsed = JSON.parse(response.choices[0].message.content);
     } catch (e) {
@@ -67,7 +63,7 @@ If unsure, leave fields blank.`,
     }
 
     return new Response(
-      JSON.stringify({ success: true, data: parsed }, null, 2),
+      JSON.stringify({ data: parsed }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
