@@ -14,12 +14,7 @@
   SMTP_USER = "ehevelone@gmail.com"
   # 🚨 SMTP_PASS stays in Netlify EVs, not here.
 
-# 🔔 Test schedule: every 2 minutes (temporary so we can see it fire)
+# 🔔 Test schedule: every 2 minutes
 [[scheduled.functions]]
   name = "weeklyReport"
   cron = "*/2 * * * *"
-
-# 🔔 Production schedule: 6 AM Central (11 AM UTC) daily
-[[scheduled.functions]]
-  name = "weeklyReport"
-  cron = "0 11 * * *"
