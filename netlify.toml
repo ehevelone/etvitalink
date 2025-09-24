@@ -15,3 +15,8 @@
   # 🚨 Do NOT put your app password here directly.
   # It stays in Netlify’s Environment Variables UI (where you already added it).
   # Netlify will inject it automatically at runtime.
+
+# 🔔 Test schedule: run weeklyReport every 2 minutes
+[[functions]]
+  name = "weeklyReport"
+  schedule = "*/2 * * * *"
