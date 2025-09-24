@@ -5,7 +5,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["pg", "nodemailer"]
+  external_node_modules = ["pg", "nodemailer", "qrcode"]
 
 [build.environment]
   NODE_VERSION = "18"
@@ -13,8 +13,3 @@
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
   # 🚨 SMTP_PASS stays in Netlify EVs, not here.
-
-# 🔔 Test schedule: every 2 minutes
-[[scheduled.functions]]
-  name = "weeklyReport"
-  cron = "*/2 * * * *"
