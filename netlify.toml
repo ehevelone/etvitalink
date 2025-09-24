@@ -12,11 +12,14 @@
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
-  # 🚨 Do NOT put your app password here directly.
-  # It stays in Netlify’s Environment Variables UI (where you already added it).
-  # Netlify will inject it automatically at runtime.
+  # 🚨 SMTP_PASS stays in Netlify EVs, not here.
 
-# 🔔 Test schedule: run weeklyReport every 2 minutes
+# 🔔 Test schedule: every 2 minutes (temporary so we can see it fire)
 [[scheduled.functions]]
   name = "weeklyReport"
   cron = "*/2 * * * *"
+
+# 🔔 Production schedule: 6 AM Central (11 AM UTC) daily
+[[scheduled.functions]]
+  name = "weeklyReport"
+  cron = "0 11 * * *"
