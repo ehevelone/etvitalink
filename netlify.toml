@@ -5,4 +5,13 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["pg"]
+  external_node_modules = ["pg", "nodemailer"]
+
+[build.environment]
+  NODE_VERSION = "18"
+  SMTP_HOST = "smtp.gmail.com"
+  SMTP_PORT = "587"
+  SMTP_USER = "ehevelone@gmail.com"
+  # 🚨 Do NOT put your app password here directly.
+  # It stays in Netlify’s Environment Variables UI (where you already added it).
+  # Netlify will inject it automatically at runtime.
