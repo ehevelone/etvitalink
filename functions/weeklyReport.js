@@ -1,8 +1,11 @@
+// functions/weeklyReport.js
 const db = require("./services/db");
 const nodemailer = require("nodemailer");
 
 exports.handler = async () => {
   try {
+    console.log("✅ Weekly report fired at:", new Date().toISOString());
+
     // 1. Query redemption stats grouped by agent
     const result = await db.query(`
       SELECT a.name, a.email, COUNT(r.id) AS redemptions
@@ -27,7 +30,7 @@ exports.handler = async () => {
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS, // ← your app password in Netlify EVs
+        pass: process.env.SMTP_PASS, // ← app password is in Netlify EVs
       },
     });
 
@@ -44,7 +47,7 @@ exports.handler = async () => {
       body: JSON.stringify({ success: true, message: "Report sent", rows }),
     };
   } catch (err) {
-    console.error("Weekly report error:", err);
+    console.error("❌ Weekly report error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),
