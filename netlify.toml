@@ -17,6 +17,6 @@
   # Netlify will inject it automatically at runtime.
 
 # 🔔 Test schedule: run weeklyReport every 2 minutes
-[[functions]]
+[[scheduled.functions]]
   name = "weeklyReport"
-  schedule = "*/2 * * * *"
+  cron = "*/2 * * * *"
