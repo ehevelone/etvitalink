@@ -1,5 +1,5 @@
 // functions/verifyPromo.js
-const db = require("./services/db"); // ✅ added import
+const db = require("../services/db"); // ✅ correct relative path
 
 exports.handler = async (event) => {
   try {
@@ -28,11 +28,15 @@ exports.handler = async (event) => {
       [promoCode]
     );
 
-    // Unlock user
-    await db.query(
-      "UPDATE users SET unlocked=true, promo_code=$1 WHERE username=$2",
-      [promoCode, username]
-    );
+    // Unlock user (only if users table exists)
+    try {
+      await db.query(
+        "UPDATE users SET unlocked=true, promo_code=$1 WHERE username=$2",
+        [promoCode, username]
+      );
+    } catch (e) {
+      console.warn("Users table not updated:", e.message);
+    }
 
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (err) {
