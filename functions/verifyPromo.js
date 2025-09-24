@@ -1,4 +1,6 @@
 // functions/verifyPromo.js
+const db = require("./services/db"); // ✅ added import
+
 exports.handler = async (event) => {
   try {
     const { username, promoCode } = JSON.parse(event.body);

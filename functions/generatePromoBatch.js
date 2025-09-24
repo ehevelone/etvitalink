@@ -1,7 +1,6 @@
 // functions/generatePromoBatch.js
 const crypto = require("crypto");
-// ⬆️ Replace this with your actual DB connection logic
-const db = require("../services/db");
+const db = require("./services/db"); // ✅ fixed path
 
 function generateCode(prefix = "PROMO", length = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
