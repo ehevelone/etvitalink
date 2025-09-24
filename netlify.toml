@@ -1,6 +1,8 @@
-[functions]
-  directory = "functions"
-  node_bundler = "esbuild"
+[build]
+  functions = "functions"
+  publish = "public"
+  command = "echo 'No frontend build step needed'"
 
-[build.environment]
-  NODE_VERSION = "18"
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["pg"]
