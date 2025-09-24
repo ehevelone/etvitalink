@@ -1,5 +1,5 @@
 // functions/verifyPromo.js
-const db = require("../services/db"); // ✅ correct relative path
+const db = require("./services/db"); // ✅ fixed relative path
 
 exports.handler = async (event) => {
   try {

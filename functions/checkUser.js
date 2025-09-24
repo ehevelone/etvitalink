@@ -1,5 +1,5 @@
 // functions/checkUser.js
-const db = require("./services/db");
+const db = require("./services/db"); // ✅ fixed path
 const crypto = require("crypto");
 
 function hashPassword(password) {
