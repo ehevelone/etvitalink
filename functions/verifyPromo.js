@@ -1,55 +1,79 @@
 // functions/verifyPromo.js
-const db = require("./services/db");
+const db = require("./services/db"); // optional, if you really wire a DB
+
+function ok(obj) {
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj),
+  };
+}
+
+function fail(msg) {
+  return {
+    statusCode: 400,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: false, error: msg }),
+  };
+}
 
 exports.handler = async (event) => {
   try {
-    const { username, promoCode } = JSON.parse(event.body);
+    const { username, promoCode } = JSON.parse(event.body || "{}");
 
-    // Find code
-    const result = await db.query(
-      "SELECT * FROM promo_codes WHERE code=$1",
-      [promoCode]
-    );
-
-    if (!result.rows.length) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Invalid code" }) };
+    if (!username || !promoCode) {
+      return fail("Missing username or promo code");
     }
 
-    const row = result.rows[0];
-
-    // Check usage limits
-    if (row.max_uses !== null && row.used_count >= row.max_uses) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Code usage limit reached" }) };
+    // 🚨 Master seed code (bootstraps first registrations)
+    if (promoCode === "Traci-2021") {
+      return ok({
+        success: true,
+        message: "Master promo code accepted ✅",
+        user: { username },
+      });
     }
 
-    // Update code usage count
-    await db.query(
-      "UPDATE promo_codes SET used_count = used_count + 1 WHERE code=$1",
-      [promoCode]
-    );
-
-    // Unlock user (ignore if users table missing)
+    // --- If DB available, check there ---
     try {
-      await db.query(
-        "UPDATE users SET unlocked=true, promo_code=$1 WHERE username=$2",
-        [promoCode, username]
+      const result = await db.query(
+        "SELECT * FROM promo_codes WHERE code=$1",
+        [promoCode]
       );
-    } catch (e) {
-      console.warn("Users table not updated:", e.message);
-    }
 
-    // Log redemption into redemptions table
-    try {
+      if (!result.rows.length) {
+        return fail("Invalid promo code ❌");
+      }
+
+      const row = result.rows[0];
+
+      // Usage limits
+      if (row.max_uses !== null && row.used_count >= row.max_uses) {
+        return fail("Code usage limit reached ❌");
+      }
+
+      // Increment use
+      await db.query(
+        "UPDATE promo_codes SET used_count = used_count + 1 WHERE code=$1",
+        [promoCode]
+      );
+
+      // Log redemption
       await db.query(
         "INSERT INTO redemptions (username, promo_code, agent_id, redeemed_at) VALUES ($1, $2, $3, NOW())",
         [username, promoCode, row.agent_id || null]
       );
-    } catch (e) {
-      console.warn("Redemption not logged:", e.message);
-    }
 
-    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+      return ok({ success: true, message: "Promo code accepted ✅" });
+    } catch (dbErr) {
+      console.warn("DB not available, fallback only:", dbErr.message);
+      return fail("Invalid promo code (no DB check) ❌");
+    }
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ success: false, error: err.message }),
+    };
   }
 };
