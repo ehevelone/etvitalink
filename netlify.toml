@@ -1,9 +1,9 @@
 [build]
-  functions = "functions"
   publish = "public"
   command = "echo 'No frontend build step needed'"
 
 [functions]
+  directory = "functions"
   node_bundler = "esbuild"
   external_node_modules = ["pg", "nodemailer", "qrcode"]
 
@@ -12,4 +12,4 @@
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
-  # 🚨 SMTP_PASS stays in Netlify EVs, not here.
+  # 🚨 Do NOT put SMTP_PASS here — keep it in Netlify Environment Variables
