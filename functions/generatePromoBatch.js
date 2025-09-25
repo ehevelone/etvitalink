@@ -1,6 +1,6 @@
 // functions/generatePromoBatch.js
 const crypto = require("crypto");
-const db = require("./services/db"); // ✅ fixed path
+const db = require("./services/db"); // ✅ path to db.js
 
 function generateCode(prefix = "PROMO", length = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
@@ -13,12 +13,13 @@ function generateCode(prefix = "PROMO", length = 6) {
 
 exports.handler = async (event) => {
   try {
-    const { prefix, count, maxUses } = JSON.parse(event.body);
+    const { prefix, count, maxUses, agentId } = JSON.parse(event.body);
 
     // Defaults
     const safePrefix = prefix || "PROMO";
     const total = count && count > 0 ? count : 10; // default 10 codes
     const uses = maxUses !== undefined ? maxUses : 1; // default single-use
+    const agent = agentId || null; // optional
 
     const codes = [];
 
@@ -26,8 +27,9 @@ exports.handler = async (event) => {
       const code = generateCode(safePrefix, 6);
 
       await db.query(
-        "INSERT INTO promo_codes (code, max_uses, used_count, created_at) VALUES ($1, $2, 0, NOW())",
-        [code, uses === null ? null : uses] // null = unlimited
+        `INSERT INTO promo_codes (code, max_uses, used_count, created_at, agent_id)
+         VALUES ($1, $2, 0, NOW(), $3)`,
+        [code, uses === null ? null : uses, agent]
       );
 
       codes.push(code);
@@ -38,6 +40,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         created: codes,
         maxUses: uses,
+        agentId: agent,
       }),
     };
   } catch (err) {
