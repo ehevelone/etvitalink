@@ -1,4 +1,4 @@
-// functions/check_agent.js
+// functions/register_agent.js
 const db = require("./services/db");
 const crypto = require("crypto");
 
@@ -30,36 +30,28 @@ exports.handler = async (event) => {
       return fail("Missing email or password");
     }
 
-    // Look up agent in DB
+    // Hash password before storing
+    const passwordHash = hashPassword(password);
+
+    // Insert agent into DB
     const result = await db.query(
-      "SELECT * FROM agents WHERE email=$1",
-      [email]
+      `INSERT INTO agents (email, password_hash, role, active)
+       VALUES ($1, $2, 'agent', true)
+       RETURNING id, email, role, active`,
+      [email, passwordHash]
     );
 
-    if (!result.rows.length) {
-      return fail("Invalid credentials ❌");
-    }
-
-    const agent = result.rows[0];
-    const hashed = hashPassword(password);
-
-    if (agent.password_hash !== hashed) {
-      return fail("Invalid credentials ❌");
-    }
-
-    if (!agent.active) {
-      return fail("Account disabled ❌");
-    }
+    const row = result.rows[0];
 
     return ok({
-      message: "Agent login successful ✅",
-      agentId: agent.id,
-      email: agent.email,
-      role: agent.role,
-      active: agent.active,
+      message: "Agent registered successfully ✅",
+      agentId: row.id,
+      email: row.email,
+      role: row.role,
+      active: row.active,
     });
   } catch (err) {
-    console.error("❌ check_agent error:", err);
+    console.error("❌ register_agent error:", err);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
