@@ -22,12 +22,17 @@ exports.handler = async (event) => {
     const { username, promoCode } = JSON.parse(event.body || "{}");
 
     if (!username || !promoCode) {
-      return fail("Missing username or promo code");
+      return fail("Username and promo code are required.");
     }
 
-    // Look up promo code
+    // 🔎 Look up promo code & agent
     const result = await db.query(
-      "SELECT * FROM promo_codes WHERE code=$1",
+      `SELECT pc.id as promo_id, pc.code, pc.agent_id,
+              a.id as agent_id, a.email as agent_email, a.npn,
+              a.role, a.active
+       FROM promo_codes pc
+       LEFT JOIN agents a ON pc.agent_id = a.id
+       WHERE pc.code = $1`,
       [promoCode]
     );
 
@@ -37,37 +42,36 @@ exports.handler = async (event) => {
 
     const row = result.rows[0];
 
-    // Check usage limits
-    if (row.max_uses !== null && row.used_count >= row.max_uses) {
-      return fail("Promo code usage limit reached ❌");
+    // ✅ Optional: enforce active status
+    if (!row.active) {
+      return fail("This agent is not active ❌");
     }
 
-    // Increment usage count
+    // ✅ Track usage
     await db.query(
-      "UPDATE promo_codes SET used_count = used_count + 1 WHERE code=$1",
-      [promoCode]
-    );
-
-    // Log redemption
-    await db.query(
-      "INSERT INTO redemptions (username, promo_code, redeemed_at, agent_id) VALUES ($1, $2, NOW(), $3)",
-      [username, promoCode, row.agent_id]
+      "UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1",
+      [row.promo_id]
     );
 
     return ok({
       message: "Promo code accepted ✅",
-      agentId: row.agent_id,
-      code: promoCode,
+      code: row.code,
+      agent: {
+        id: row.agent_id,
+        email: row.agent_email,
+        npn: row.npn,
+        role: row.role,
+        active: row.active,
+      },
     });
   } catch (err) {
-    console.error("❌ verify_promo error:", err); // goes to Netlify logs
+    console.error("❌ verify_promo error:", err);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         success: false,
-        error: err.message,
-        stack: err.stack,   // 👈 include stack trace for debugging
+        error: "Server error: " + err.message,
       }),
     };
   }

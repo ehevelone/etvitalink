@@ -1,4 +1,3 @@
-// functions/register_agent.js
 const db = require("./services/db");
 const crypto = require("crypto");
 
@@ -24,10 +23,10 @@ function fail(msg) {
 
 exports.handler = async (event) => {
   try {
-    const { email, password, unlockCode } = JSON.parse(event.body || "{}");
+    const { email, password, unlockCode, npn } = JSON.parse(event.body || "{}");
 
-    if (!email || !password || !unlockCode) {
-      return fail("Email, password, and unlock code are required.");
+    if (!email || !password || !unlockCode || !npn) {
+      return fail("Email, password, unlock code, and NPN are required.");
     }
 
     // 🔎 Validate unlock code
@@ -43,10 +42,7 @@ exports.handler = async (event) => {
     const codeRow = codeResult.rows[0];
 
     // 🔎 Check for duplicate email
-    const dupCheck = await db.query(
-      "SELECT id FROM agents WHERE email=$1",
-      [email]
-    );
+    const dupCheck = await db.query("SELECT id FROM agents WHERE email=$1", [email]);
 
     if (dupCheck.rows.length > 0) {
       return fail("This email is already registered. Please log in instead.");
@@ -57,18 +53,27 @@ exports.handler = async (event) => {
 
     // Insert agent into DB
     const result = await db.query(
-      `INSERT INTO agents (email, password_hash, role, active)
-       VALUES ($1, $2, 'agent', true)
-       RETURNING id, email, role, active`,
-      [email, passwordHash]
+      `INSERT INTO agents (email, password_hash, npn, role, active)
+       VALUES ($1, $2, $3, 'agent', true)
+       RETURNING id, email, npn, role, active`,
+      [email, passwordHash, npn]
     );
 
     const row = result.rows[0];
 
-    // Mark promo code as redeemed
+    // Mark unlock code as redeemed
+    await db.query("UPDATE promo_codes SET redeemed=true, agent_id=$1 WHERE id=$2", [
+      row.id,
+      codeRow.id,
+    ]);
+
+    // Generate permanent promo code for this agent
+    const agentCode = `AGT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
     await db.query(
-      "UPDATE promo_codes SET redeemed=true, agent_id=$1 WHERE id=$2",
-      [row.id, codeRow.id]
+      `INSERT INTO promo_codes (code, agent_id, max_uses)
+       VALUES ($1, $2, NULL)`,
+      [agentCode, row.id]
     );
 
     return ok({
@@ -77,6 +82,7 @@ exports.handler = async (event) => {
       email: row.email,
       role: row.role,
       active: row.active,
+      code: agentCode,
     });
   } catch (err) {
     console.error("❌ register_agent error:", err);
