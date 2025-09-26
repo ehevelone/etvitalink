@@ -60,11 +60,15 @@ exports.handler = async (event) => {
       code: promoCode,
     });
   } catch (err) {
-    console.error("❌ verify_promo error:", err);
+    console.error("❌ verify_promo error:", err); // goes to Netlify logs
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message }),
+      body: JSON.stringify({
+        success: false,
+        error: err.message,
+        stack: err.stack,   // 👈 include stack trace for debugging
+      }),
     };
   }
 };
