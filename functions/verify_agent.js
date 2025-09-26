@@ -1,5 +1,5 @@
-// functions/verifyPromo.js
-const db = require("./services/db"); // optional, if you really wire a DB
+// functions/verify_agent.js
+const db = require("./services/db"); // optional, only if DB is connected
 
 function ok(obj) {
   return {
@@ -19,55 +19,66 @@ function fail(msg) {
 
 exports.handler = async (event) => {
   try {
-    const { username, promoCode } = JSON.parse(event.body || "{}");
+    console.log("RAW EVENT BODY:", event.body); // 👀 debug log
 
-    if (!username || !promoCode) {
-      return fail("Missing username or promo code");
+    // ✅ Safe body parsing: supports JSON and form-encoded
+    let body = {};
+    try {
+      body = JSON.parse(event.body || "{}"); // normal JSON
+    } catch {
+      // fallback: form-encoded
+      body = Object.fromEntries(new URLSearchParams(event.body || ""));
     }
 
-    // 🚨 Master seed code (bootstraps first registrations)
-    if (promoCode === "Traci-2021") {
+    const { username, unlockCode } = body;
+
+    if (!username || !unlockCode) {
+      return fail("Missing username or unlock code");
+    }
+
+    // 🚨 Master seed unlock code (bootstraps first agents)
+    if (unlockCode === "Traci-2021") {
       return ok({
         success: true,
-        message: "Master promo code accepted ✅",
-        user: { username },
+        message: "Master unlock code accepted ✅",
+        agent: { username },
       });
     }
 
-    // --- If DB available, check there ---
+    // --- If DB available, validate against table ---
     try {
       const result = await db.query(
-        "SELECT * FROM promo_codes WHERE code=$1",
-        [promoCode]
+        "SELECT * FROM agent_codes WHERE code=$1",
+        [unlockCode]
       );
 
       if (!result.rows.length) {
-        return fail("Invalid promo code ❌");
+        return fail("Invalid unlock code ❌");
       }
 
       const row = result.rows[0];
 
       // Usage limits
       if (row.max_uses !== null && row.used_count >= row.max_uses) {
-        return fail("Code usage limit reached ❌");
+        return fail("Unlock code usage limit reached ❌");
       }
 
-      // Increment use
+      // Increment usage count
       await db.query(
-        "UPDATE promo_codes SET used_count = used_count + 1 WHERE code=$1",
-        [promoCode]
+        "UPDATE agent_codes SET used_count = used_count + 1 WHERE code=$1",
+        [unlockCode]
       );
 
       // Log redemption
       await db.query(
-        "INSERT INTO redemptions (username, promo_code, agent_id, redeemed_at) VALUES ($1, $2, $3, NOW())",
-        [username, promoCode, row.agent_id || null]
+        "INSERT INTO agent_redemptions (username, code, redeemed_at) VALUES ($1, $2, NOW())",
+        [username, unlockCode]
       );
 
-      return ok({ success: true, message: "Promo code accepted ✅" });
+      return ok({ success: true, message: "Unlock code accepted ✅" });
     } catch (dbErr) {
       console.warn("DB not available, fallback only:", dbErr.message);
-      return fail("Invalid promo code (no DB check) ❌");
+      return fail("Invalid unlock code (no DB check) ❌");
     }
   } catch (err) {
     return {
