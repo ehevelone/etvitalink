@@ -24,10 +24,32 @@ function fail(msg) {
 
 exports.handler = async (event) => {
   try {
-    const { email, password } = JSON.parse(event.body || "{}");
+    const { email, password, unlockCode } = JSON.parse(event.body || "{}");
 
-    if (!email || !password) {
-      return fail("Missing email or password");
+    if (!email || !password || !unlockCode) {
+      return fail("Email, password, and unlock code are required.");
+    }
+
+    // 🔎 Validate unlock code
+    const codeResult = await db.query(
+      "SELECT * FROM promo_codes WHERE code=$1 AND redeemed=false",
+      [unlockCode]
+    );
+
+    if (!codeResult.rows.length) {
+      return fail("Invalid or already used unlock code ❌");
+    }
+
+    const codeRow = codeResult.rows[0];
+
+    // 🔎 Check for duplicate email
+    const dupCheck = await db.query(
+      "SELECT id FROM agents WHERE email=$1",
+      [email]
+    );
+
+    if (dupCheck.rows.length > 0) {
+      return fail("This email is already registered. Please log in instead.");
     }
 
     // Hash password before storing
@@ -43,6 +65,12 @@ exports.handler = async (event) => {
 
     const row = result.rows[0];
 
+    // Mark promo code as redeemed
+    await db.query(
+      "UPDATE promo_codes SET redeemed=true, agent_id=$1 WHERE id=$2",
+      [row.id, codeRow.id]
+    );
+
     return ok({
       message: "Agent registered successfully ✅",
       agentId: row.id,
@@ -55,7 +83,10 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message }),
+      body: JSON.stringify({
+        success: false,
+        error: "Server error: " + err.message,
+      }),
     };
   }
 };

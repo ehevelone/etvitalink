@@ -27,28 +27,28 @@ exports.handler = async (event) => {
     const { email, password } = JSON.parse(event.body || "{}");
 
     if (!email || !password) {
-      return fail("Missing email or password");
+      return fail("Missing email or password.");
     }
 
-    // Look up agent in DB
+    // 🔎 Look up agent by email
     const result = await db.query(
       "SELECT * FROM agents WHERE email=$1",
       [email]
     );
 
     if (!result.rows.length) {
-      return fail("Invalid credentials ❌");
+      return fail("No account found with this email.");
     }
 
     const agent = result.rows[0];
     const hashed = hashPassword(password);
 
     if (agent.password_hash !== hashed) {
-      return fail("Invalid credentials ❌");
+      return fail("Invalid password ❌");
     }
 
     if (!agent.active) {
-      return fail("Account disabled ❌");
+      return fail("This account has been disabled.");
     }
 
     return ok({
@@ -63,7 +63,10 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message }),
+      body: JSON.stringify({
+        success: false,
+        error: "Server error: " + err.message,
+      }),
     };
   }
 };
