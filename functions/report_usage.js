@@ -37,13 +37,13 @@ exports.handler = async (event) => {
       ORDER BY total_uses DESC
     `);
 
-    // 📊 Monthly usage (current calendar month)
+    // 📊 Monthly usage (current calendar month, based on redeemed_at)
     const monthlyResult = await db.query(`
       SELECT a.id, a.email, COUNT(r.id) AS monthly_uses
       FROM agents a
       LEFT JOIN redemptions r 
         ON a.id = r.agent_id 
-       AND date_trunc('month', r.used_at) = date_trunc('month', CURRENT_DATE)
+       AND date_trunc('month', r.redeemed_at) = date_trunc('month', CURRENT_DATE)
       GROUP BY a.id, a.email
       ORDER BY monthly_uses DESC
     `);
