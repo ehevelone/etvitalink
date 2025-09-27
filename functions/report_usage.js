@@ -19,38 +19,39 @@ function fail(msg) {
 
 exports.handler = async (event) => {
   try {
-    // 🔐 Require admin key
-    const key = event.headers["x-admin-key"];
-    if (key !== process.env.ADMIN_KEY) {
+    // 🔑 Accept key from either header OR query string
+    const key =
+      event.headers["x-admin-key"] ||
+      (event.queryStringParameters && event.queryStringParameters.key);
+
+    if (!key || key !== process.env.ADMIN_KEY) {
       return fail("Unauthorized ❌");
     }
 
-    // 📊 Lifetime usage per agent
-    const lifetime = await db.query(
-      `SELECT a.id, a.email, COUNT(r.id) AS total_uses
-       FROM agents a
-       LEFT JOIN promo_codes pc ON pc.agent_id = a.id
-       LEFT JOIN redemptions r ON r.code_id = pc.id
-       GROUP BY a.id, a.email
-       ORDER BY total_uses DESC`
-    );
+    // 📊 Lifetime usage
+    const lifetimeResult = await db.query(`
+      SELECT a.id, a.email, COUNT(r.id) AS total_uses
+      FROM agents a
+      LEFT JOIN redemptions r ON a.id = r.agent_id
+      GROUP BY a.id, a.email
+      ORDER BY total_uses DESC
+    `);
 
-    // 📊 Monthly usage per agent (this calendar month)
-    const monthly = await db.query(
-      `SELECT a.id, a.email, COUNT(r.id) AS month_uses
-       FROM agents a
-       LEFT JOIN promo_codes pc ON pc.agent_id = a.id
-       LEFT JOIN redemptions r 
-         ON r.code_id = pc.id 
-        AND date_trunc('month', r.created_at) = date_trunc('month', CURRENT_DATE)
-       GROUP BY a.id, a.email
-       ORDER BY month_uses DESC`
-    );
+    // 📊 Monthly usage (current calendar month)
+    const monthlyResult = await db.query(`
+      SELECT a.id, a.email, COUNT(r.id) AS monthly_uses
+      FROM agents a
+      LEFT JOIN redemptions r 
+        ON a.id = r.agent_id 
+       AND date_trunc('month', r.used_at) = date_trunc('month', CURRENT_DATE)
+      GROUP BY a.id, a.email
+      ORDER BY monthly_uses DESC
+    `);
 
     return ok({
       message: "Usage report generated ✅",
-      lifetime: lifetime.rows,
-      monthly: monthly.rows,
+      lifetime: lifetimeResult.rows,
+      monthly: monthlyResult.rows,
     });
   } catch (err) {
     console.error("❌ report_usage error:", err);
