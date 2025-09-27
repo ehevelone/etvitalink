@@ -1,19 +1,17 @@
 // functions/report_usage.js
 const db = require("./services/db");
 
-const ADMIN_KEY = process.env.ADMIN_KEY || "supersecret";
-
-function ok(body, contentType = "application/json") {
+function ok(obj) {
   return {
     statusCode: 200,
-    headers: { "Content-Type": contentType },
-    body,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: true, ...obj }),
   };
 }
 
-function fail(msg, code = 400) {
+function fail(msg) {
   return {
-    statusCode: code,
+    statusCode: 400,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ success: false, error: msg }),
   };
@@ -21,84 +19,48 @@ function fail(msg, code = 400) {
 
 exports.handler = async (event) => {
   try {
-    const { key, format } = event.queryStringParameters || {};
-
-    if (key !== ADMIN_KEY) {
-      return fail("Forbidden", 403);
+    // 🔐 Require admin key
+    const key = event.headers["x-admin-key"];
+    if (key !== process.env.ADMIN_KEY) {
+      return fail("Unauthorized ❌");
     }
 
-    // 🔎 Query lifetime and monthly usage
-    const result = await db.query(`
-      SELECT a.id as agent_id, a.email, a.npn,
-             COUNT(r.id) as lifetime_uses,
-             COUNT(r.id) FILTER (
-               WHERE DATE_TRUNC('month', r.used_at) = DATE_TRUNC('month', CURRENT_DATE)
-             ) as monthly_uses
-      FROM agents a
-      LEFT JOIN redemptions r ON a.id = r.agent_id
-      GROUP BY a.id, a.email, a.npn
-      ORDER BY a.email;
-    `);
+    // 📊 Lifetime usage per agent
+    const lifetime = await db.query(
+      `SELECT a.id, a.email, COUNT(r.id) AS total_uses
+       FROM agents a
+       LEFT JOIN promo_codes pc ON pc.agent_id = a.id
+       LEFT JOIN redemptions r ON r.code_id = pc.id
+       GROUP BY a.id, a.email
+       ORDER BY total_uses DESC`
+    );
 
-    const rows = result.rows;
+    // 📊 Monthly usage per agent (this calendar month)
+    const monthly = await db.query(
+      `SELECT a.id, a.email, COUNT(r.id) AS month_uses
+       FROM agents a
+       LEFT JOIN promo_codes pc ON pc.agent_id = a.id
+       LEFT JOIN redemptions r 
+         ON r.code_id = pc.id 
+        AND date_trunc('month', r.created_at) = date_trunc('month', CURRENT_DATE)
+       GROUP BY a.id, a.email
+       ORDER BY month_uses DESC`
+    );
 
-    if (format === "csv") {
-      // 📄 CSV export
-      const header = "Agent ID,Email,NPN,Lifetime Uses,Monthly Uses";
-      const csvRows = rows.map(
-        (r) =>
-          `${r.agent_id},${r.email},${r.npn || ""},${r.lifetime_uses},${r.monthly_uses}`
-      );
-      const csv = [header, ...csvRows].join("\n");
-      return ok(csv, "text/csv");
-    } else {
-      // 🌐 HTML export
-      let html = `
-        <html>
-          <head>
-            <title>Usage Report</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
-              h1 { margin-bottom: 20px; }
-              table { border-collapse: collapse; width: 100%; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-            </style>
-          </head>
-          <body>
-            <h1>Agent Usage Report</h1>
-            <table>
-              <tr>
-                <th>Agent ID</th>
-                <th>Email</th>
-                <th>NPN</th>
-                <th>Lifetime Uses</th>
-                <th>Monthly Uses</th>
-              </tr>
-      `;
-
-      for (const r of rows) {
-        html += `
-          <tr>
-            <td>${r.agent_id}</td>
-            <td>${r.email}</td>
-            <td>${r.npn || ""}</td>
-            <td>${r.lifetime_uses}</td>
-            <td>${r.monthly_uses}</td>
-          </tr>
-        `;
-      }
-
-      html += `
-            </table>
-          </body>
-        </html>
-      `;
-
-      return ok(html, "text/html");
-    }
+    return ok({
+      message: "Usage report generated ✅",
+      lifetime: lifetime.rows,
+      monthly: monthly.rows,
+    });
   } catch (err) {
     console.error("❌ report_usage error:", err);
-    return fail("Server error: " + err.message, 500);
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        success: false,
+        error: "Server error: " + err.message,
+      }),
+    };
   }
 };
