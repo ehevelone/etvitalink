@@ -18,7 +18,6 @@ exports.handler = async () => {
     const unlockCode = generateUnlockCode();
 
     // 2. Create placeholder agent record in DB
-    // NOTE: only inserting columns we care about now (role, active, unlock_code, created_at)
     const result = await db.query(
       `INSERT INTO agents (role, active, unlock_code, created_at)
        VALUES ('agent', FALSE, $1, NOW())
@@ -79,10 +78,11 @@ exports.handler = async () => {
       headers: { "Content-Type": "text/html" },
       body: html,
     };
-} catch (err) {
-  console.error("Error in agent_onboard:", err);
-  return {
-    statusCode: 500,
-    body: `Server error: ${err.message}`,
-  };
-}
+  } catch (err) {
+    console.error("Error in agent_onboard:", err);
+    return {
+      statusCode: 500,
+      body: `Server error: ${err.message}`,
+    };
+  }
+};
