@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VitaLink Agent Onboarding</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background-color: #f5f9ff;
+      color: #222;
+    }
+    img.logo {
+      width: 160px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #0077cc;
+      font-size: 24px;
+    }
+    p {
+      font-size: 16px;
+      margin: 16px 0;
+    }
+    a.button {
+      display: inline-block;
+      padding: 12px 20px;
+      margin: 10px;
+      background: #0077cc;
+      color: #fff;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a.button.secondary {
+      background: #555;
+    }
+  </style>
+  <script>
+    function openApp() {
+      // Try to open VitaLink app
+      window.location = "vitalink://agent/onboard";
+
+      // Fallback after 2 seconds → show download buttons
+      setTimeout(function () {
+        document.getElementById("fallback").style.display = "block";
+      }, 2000);
+    }
+    window.onload = openApp;
+  </script>
+</head>
+<body>
+  <img src="/vitalink-logo-1.png" alt="VitaLink Logo" class="logo" />
+  <h1>Opening VitaLink…</h1>
+  <p>If you already have the app installed, it should open automatically.</p>
+
+  <div id="fallback" style="display: none;">
+    <p>Don’t have the app yet? Download it here:</p>
+    <a class="button" href="https://play.google.com/store/apps/details?id=com.example.vitalink" target="_blank">📱 Google Play</a>
+    <a class="button secondary" href="https://apps.apple.com/app/idXXXXXXXXX" target="_blank">🍎 App Store</a>
+  </div>
+</body>
+</html>
