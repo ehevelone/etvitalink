@@ -6,19 +6,11 @@ function hashPassword(password) {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
-function ok(obj) {
+function reply(success, obj = {}) {
   return {
-    statusCode: 200,
+    statusCode: 200, // ✅ always 200 so Flutter can parse it
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg) {
-  return {
-    statusCode: 400,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    body: JSON.stringify({ success, ...obj }),
   };
 }
 
@@ -27,7 +19,7 @@ exports.handler = async (event) => {
     const { username, password } = JSON.parse(event.body || "{}");
 
     if (!username || !password) {
-      return fail("Username and password required ❌");
+      return reply(false, { error: "Username and password required ❌" });
     }
 
     // Look up user in DB
@@ -37,18 +29,18 @@ exports.handler = async (event) => {
     );
 
     if (!result.rows.length) {
-      return fail("User not found ❌");
+      return reply(false, { error: "No user exists, please register first." });
     }
 
     const user = result.rows[0];
     const hashed = hashPassword(password);
 
     if (user.password_hash !== hashed) {
-      return fail("Invalid password ❌");
+      return reply(false, { error: "Invalid password ❌" });
     }
 
     // ✅ Success
-    return ok({
+    return reply(true, {
       message: "User login successful ✅",
       userId: user.id,
       username: user.username,
@@ -56,10 +48,6 @@ exports.handler = async (event) => {
     });
   } catch (err) {
     console.error("❌ check_user error:", err);
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message }),
-    };
+    return reply(false, { error: "Server error: " + err.message });
   }
 };
