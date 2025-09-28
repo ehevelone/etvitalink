@@ -79,11 +79,10 @@ exports.handler = async () => {
       headers: { "Content-Type": "text/html" },
       body: html,
     };
-  } catch (err) {
-    console.error("Error in agent_onboard:", err);
-    return {
-      statusCode: 500,
-      body: "Server error",
-    };
-  }
-};
+} catch (err) {
+  console.error("Error in agent_onboard:", err);
+  return {
+    statusCode: 500,
+    body: `Server error: ${err.message}`,
+  };
+}
