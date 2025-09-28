@@ -5,7 +5,13 @@
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  external_node_modules = ["pg", "nodemailer", "qrcode"]
+  # ✅ Include all Node dependencies your functions use
+  external_node_modules = [
+    "pg",
+    "nodemailer",
+    "qrcode",
+    "bcryptjs"
+  ]
 
 [build.environment]
   NODE_VERSION = "18"
