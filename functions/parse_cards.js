@@ -82,7 +82,6 @@ Always return valid JSON with keys:
       model: "gpt-image-1",
       prompt: "Crop this image tightly to only show the insurance card. Remove all background.",
       size: "512x512",
-      response_format: "b64_json",
       image: [imageInput.image_url.url], // reuse same uploaded image
     });
 
