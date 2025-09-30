@@ -17,14 +17,11 @@ export default async (req) => {
     }
 
     // ✅ Ensure we have image input
-    let imageInput;
+    let imageInputUrl;
     if (body.imageUrl) {
-      imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
+      imageInputUrl = body.imageUrl;
     } else if (body.imageBase64) {
-      imageInput = {
-        type: "image_url",
-        image_url: { url: `data:image/jpeg;base64,${body.imageBase64}` },
-      };
+      imageInputUrl = `data:image/jpeg;base64,${body.imageBase64}`;
     } else {
       return new Response(
         JSON.stringify({
@@ -54,7 +51,7 @@ Always return valid JSON with keys:
           role: "user",
           content: [
             { type: "text", text: "Extract insurance card information." },
-            imageInput,
+            { type: "image_url", image_url: { url: imageInputUrl } },
           ],
         },
       ],
@@ -78,11 +75,11 @@ Always return valid JSON with keys:
     };
 
     // ✅ Call OpenAI Images API to crop card
-    const crop = await client.images.generate({
+    const crop = await client.images.edits({
       model: "gpt-image-1",
+      image: [imageInputUrl], // reuse same uploaded image
       prompt: "Crop this image tightly to only show the insurance card. Remove all background.",
-      size: "512x512",
-      image: [imageInput.image_url.url], // reuse same uploaded image
+      size: "512x512"
     });
 
     const croppedBase64 = crop.data[0].b64_json;
