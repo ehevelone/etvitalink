@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import sharp from "sharp";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -24,40 +23,42 @@ export default async (req) => {
       );
     }
 
-    const imageBuffer = Buffer.from(body.imageBase64, "base64");
-    const meta = await sharp(imageBuffer).metadata();
-    const imgW = meta.width || 0;
-    const imgH = meta.height || 0;
+    // ✅ Step 1: Clean up the card (background removal, sharpen, resize)
+    const cleaned = await client.images.generate({
+      model: "gpt-image-1",
+      prompt: "Clean this insurance card photo. Keep only the card, remove background, sharpen text.",
+      size: "512x512",
+      image: [{ url: `data:image/jpeg;base64,${body.imageBase64}` }],
+      response_format: "b64_json"
+    });
 
-    console.log("👉 Original image size:", imgW, imgH);
+    const cleanedBase64 = cleaned.data[0].b64_json;
 
-    // ✅ Step 1: Ask AI for bounding box
+    // ✅ Step 2: Extract structured info from the cleaned card
     const visionResp = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
         {
           role: "system",
-          content: `You are an assistant that finds the bounding box of an insurance card in a photo.
-Return JSON only:
+          content: `You are an assistant that extracts structured information from an insurance card.
+Always return valid JSON with keys:
 {
-  "x": int, "y": int, "width": int, "height": int,
-  "carrier": "string", "policy": "string",
-  "memberId": "string", "group": "string",
+  "carrier": "string",
+  "policy": "string",
+  "memberId": "string",
+  "group": "string",
   "side": "front" | "back"
-}
-Rules:
-- The card is a RECTANGLE, ignore background (desk, hand, shadows).
-- If uncertain, return the full image size instead of guessing.`
+}`
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Locate the insurance card and return bounding box + details." },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${body.imageBase64}` } }
+            { type: "text", text: "Extract insurance card information." },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${cleanedBase64}` } }
           ]
         }
       ],
-      max_tokens: 500,
+      max_tokens: 400,
       response_format: { type: "json_object" }
     });
 
@@ -68,64 +69,7 @@ Rules:
       parsed = {};
     }
 
-    console.log("👉 AI Parsed:", parsed);
-
-    let { x = 0, y = 0, width = imgW, height = imgH } = parsed;
-
-    // ✅ Step 2: Sanity checks
-    let useAI = true;
-    if (width <= 50 || height <= 50) useAI = false;
-    if (width > imgW * 0.95 && height > imgH * 0.95) useAI = false;
-    if (x < 0 || y < 0 || x + width > imgW || y + height > imgH) useAI = false;
-
-    let croppedBase64, debugOverlayBase64, finalMeta;
-    try {
-      let pipeline = sharp(imageBuffer);
-
-      if (useAI) {
-        console.log("👉 Using AI crop:", { x, y, width, height });
-        pipeline = pipeline.extract({ left: x, top: y, width, height });
-      } else {
-        console.log("⚠️ AI box invalid → using Sharp.trim() fallback");
-        pipeline = pipeline.trim();
-      }
-
-      const cropped = await pipeline
-        .resize(512, 512, { fit: "cover" })
-        .png()
-        .toBuffer();
-
-      const croppedInfo = await sharp(cropped).metadata();
-      finalMeta = { width: croppedInfo.width, height: croppedInfo.height, usedAI: useAI };
-
-      croppedBase64 = cropped.toString("base64");
-    } catch (e) {
-      console.error("❌ Sharp crop error:", e);
-      croppedBase64 = body.imageBase64;
-      finalMeta = { width: imgW, height: imgH, fallback: true };
-    }
-
-    // ✅ Step 3: Create overlay debug image (original with bounding box drawn)
-    try {
-      const svgOverlay = `
-        <svg width="${imgW}" height="${imgH}">
-          <rect x="${x}" y="${y}" width="${width}" height="${height}"
-            fill="none" stroke="red" stroke-width="10"/>
-        </svg>`;
-      const overlayBuffer = Buffer.from(svgOverlay);
-
-      const debugOverlay = await sharp(imageBuffer)
-        .composite([{ input: overlayBuffer, top: 0, left: 0 }])
-        .jpeg()
-        .toBuffer();
-
-      debugOverlayBase64 = debugOverlay.toString("base64");
-    } catch (e) {
-      console.error("❌ Debug overlay error:", e);
-      debugOverlayBase64 = null;
-    }
-
-    // ✅ Step 4: Normalize meta
+    // ✅ Normalize fields
     const normalized = {
       carrier: parsed.carrier || "",
       policy: parsed.policy || "",
@@ -134,12 +78,11 @@ Rules:
       side: parsed.side || "front"
     };
 
+    // ✅ Return cleaned image + extracted info
     return new Response(
       JSON.stringify({
-        card_image_base64: croppedBase64,
-        meta: normalized,
-        crop_debug: finalMeta,
-        overlay_debug: debugOverlayBase64 // 👈 original with red box
+        card_image_base64: cleanedBase64,
+        meta: normalized
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -147,7 +90,7 @@ Rules:
   } catch (err) {
     console.error("parse_cards error:", err);
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({ error: err.message, details: err.response?.data || null }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
