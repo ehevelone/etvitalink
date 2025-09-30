@@ -78,7 +78,7 @@ Rules:
     if (width > imgW * 0.95 && height > imgH * 0.95) useAI = false; // covering whole frame
     if (x < 0 || y < 0 || x + width > imgW || y + height > imgH) useAI = false; // out of bounds
 
-    let croppedBase64;
+    let croppedBase64, finalMeta;
     try {
       let pipeline = sharp(imageBuffer);
 
@@ -95,10 +95,15 @@ Rules:
         .png()
         .toBuffer();
 
+      const croppedInfo = await sharp(cropped).metadata();
+      finalMeta = { width: croppedInfo.width, height: croppedInfo.height };
+      console.log("👉 Final cropped size:", finalMeta);
+
       croppedBase64 = cropped.toString("base64");
     } catch (e) {
       console.error("❌ Sharp crop error:", e);
       croppedBase64 = body.imageBase64; // fallback = original
+      finalMeta = { width: imgW, height: imgH, fallback: true };
     }
 
     // ✅ Step 3: Normalize meta
@@ -113,7 +118,8 @@ Rules:
     return new Response(
       JSON.stringify({
         card_image_base64: croppedBase64,
-        meta: normalized
+        meta: normalized,
+        crop_debug: finalMeta  // 👈 debugging info
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
