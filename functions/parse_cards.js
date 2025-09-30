@@ -34,7 +34,7 @@ export default async (req) => {
       );
     }
 
-    // ✅ Call OpenAI Vision
+    // ✅ (Optional) Extract text fields — but we won’t use them in Flutter
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -62,17 +62,13 @@ Always return valid JSON with keys:
       response_format: { type: "json_object" },
     });
 
-    const rawContent = response.choices[0].message.content;
-    console.log("AI Raw Response:", rawContent);
-
-    let parsed;
+    let parsed = {};
     try {
-      parsed = JSON.parse(rawContent);
+      parsed = JSON.parse(response.choices[0].message.content || "{}");
     } catch {
-      parsed = { rawText: rawContent }; // fallback
+      parsed = {};
     }
 
-    // ✅ Guarantee all keys exist
     const normalized = {
       carrier: parsed.carrier || "",
       policy: parsed.policy || "",
@@ -81,12 +77,28 @@ Always return valid JSON with keys:
       side: parsed.side || "front",
     };
 
-    return new Response(JSON.stringify({ data: normalized }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+    // ✅ Call OpenAI Images API to crop card
+    const crop = await client.images.generate({
+      model: "gpt-image-1",
+      prompt: "Crop this image tightly to only show the insurance card. Remove all background.",
+      size: "512x512",
+      response_format: "b64_json",
+      image: [imageInput.image_url.url], // reuse same uploaded image
     });
+
+    const croppedBase64 = crop.data[0].b64_json;
+
+    // ✅ Return only cropped image (meta included if you want it later)
+    return new Response(
+      JSON.stringify({
+        card_image_base64: croppedBase64,  // 👈 MAIN payload
+        meta: normalized                   // optional, can be ignored
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+
   } catch (err) {
-    console.error("parse-cards error:", err);
+    console.error("parse_cards error:", err);
     return new Response(
       JSON.stringify({
         error: err.message,
