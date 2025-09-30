@@ -74,11 +74,11 @@ Rules:
 
     // ✅ Step 2: Sanity checks
     let useAI = true;
-    if (width <= 50 || height <= 50) useAI = false; // too small
-    if (width > imgW * 0.95 && height > imgH * 0.95) useAI = false; // covering whole frame
-    if (x < 0 || y < 0 || x + width > imgW || y + height > imgH) useAI = false; // out of bounds
+    if (width <= 50 || height <= 50) useAI = false;
+    if (width > imgW * 0.95 && height > imgH * 0.95) useAI = false;
+    if (x < 0 || y < 0 || x + width > imgW || y + height > imgH) useAI = false;
 
-    let croppedBase64, finalMeta;
+    let croppedBase64, debugOverlayBase64, finalMeta;
     try {
       let pipeline = sharp(imageBuffer);
 
@@ -87,7 +87,7 @@ Rules:
         pipeline = pipeline.extract({ left: x, top: y, width, height });
       } else {
         console.log("⚠️ AI box invalid → using Sharp.trim() fallback");
-        pipeline = pipeline.trim(); // auto edge detect
+        pipeline = pipeline.trim();
       }
 
       const cropped = await pipeline
@@ -96,17 +96,36 @@ Rules:
         .toBuffer();
 
       const croppedInfo = await sharp(cropped).metadata();
-      finalMeta = { width: croppedInfo.width, height: croppedInfo.height };
-      console.log("👉 Final cropped size:", finalMeta);
+      finalMeta = { width: croppedInfo.width, height: croppedInfo.height, usedAI: useAI };
 
       croppedBase64 = cropped.toString("base64");
     } catch (e) {
       console.error("❌ Sharp crop error:", e);
-      croppedBase64 = body.imageBase64; // fallback = original
+      croppedBase64 = body.imageBase64;
       finalMeta = { width: imgW, height: imgH, fallback: true };
     }
 
-    // ✅ Step 3: Normalize meta
+    // ✅ Step 3: Create overlay debug image (original with bounding box drawn)
+    try {
+      const svgOverlay = `
+        <svg width="${imgW}" height="${imgH}">
+          <rect x="${x}" y="${y}" width="${width}" height="${height}"
+            fill="none" stroke="red" stroke-width="10"/>
+        </svg>`;
+      const overlayBuffer = Buffer.from(svgOverlay);
+
+      const debugOverlay = await sharp(imageBuffer)
+        .composite([{ input: overlayBuffer, top: 0, left: 0 }])
+        .jpeg()
+        .toBuffer();
+
+      debugOverlayBase64 = debugOverlay.toString("base64");
+    } catch (e) {
+      console.error("❌ Debug overlay error:", e);
+      debugOverlayBase64 = null;
+    }
+
+    // ✅ Step 4: Normalize meta
     const normalized = {
       carrier: parsed.carrier || "",
       policy: parsed.policy || "",
@@ -119,7 +138,8 @@ Rules:
       JSON.stringify({
         card_image_base64: croppedBase64,
         meta: normalized,
-        crop_debug: finalMeta  // 👈 debugging info
+        crop_debug: finalMeta,
+        overlay_debug: debugOverlayBase64 // 👈 original with red box
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
