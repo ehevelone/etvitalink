@@ -23,16 +23,20 @@ export default async (req) => {
       );
     }
 
+    console.log("👉 Received base64 image, length:", body.imageBase64.length);
+
     // ✅ Step 1: Clean up the card (background removal, sharpen, resize)
-    const cleaned = await client.images.generate({
+    const cleaned = await client.images.edits({
       model: "gpt-image-1",
-      prompt: "Clean this insurance card photo. Keep only the card, remove background, sharpen text.",
+      prompt:
+        "Clean this insurance card photo. Keep only the card, remove background, sharpen text.",
+      image: [`data:image/jpeg;base64,${body.imageBase64}`],
       size: "512x512",
-      image: [{ url: `data:image/jpeg;base64,${body.imageBase64}` }],
-      response_format: "b64_json"
+      response_format: "b64_json",
     });
 
     const cleanedBase64 = cleaned.data[0].b64_json;
+    console.log("👉 Cleaned image generated, length:", cleanedBase64.length);
 
     // ✅ Step 2: Extract structured info from the cleaned card
     const visionResp = await client.chat.completions.create({
@@ -48,18 +52,21 @@ Always return valid JSON with keys:
   "memberId": "string",
   "group": "string",
   "side": "front" | "back"
-}`
+}`,
         },
         {
           role: "user",
           content: [
             { type: "text", text: "Extract insurance card information." },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${cleanedBase64}` } }
-          ]
-        }
+            {
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${cleanedBase64}` },
+            },
+          ],
+        },
       ],
       max_tokens: 400,
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
     });
 
     let parsed = {};
@@ -69,28 +76,32 @@ Always return valid JSON with keys:
       parsed = {};
     }
 
+    console.log("👉 Parsed JSON:", parsed);
+
     // ✅ Normalize fields
     const normalized = {
       carrier: parsed.carrier || "",
       policy: parsed.policy || "",
       memberId: parsed.memberId || "",
       group: parsed.group || "",
-      side: parsed.side || "front"
+      side: parsed.side || "front",
     };
 
     // ✅ Return cleaned image + extracted info
     return new Response(
       JSON.stringify({
         card_image_base64: cleanedBase64,
-        meta: normalized
+        meta: normalized,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
-
   } catch (err) {
     console.error("parse_cards error:", err);
     return new Response(
-      JSON.stringify({ error: err.message, details: err.response?.data || null }),
+      JSON.stringify({
+        error: err.message,
+        details: err.response?.data || null,
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
