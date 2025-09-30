@@ -4,13 +4,11 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async (req) => {
   try {
-    // ✅ Parse request body
     const raw = await req.text();
     let body = {};
     try {
       body = JSON.parse(raw);
     } catch {
-      console.error("❌ Invalid JSON:", raw);
       return new Response(
         JSON.stringify({ error: "Invalid JSON body", received: raw }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -18,64 +16,53 @@ export default async (req) => {
     }
 
     if (!body.imageBase64) {
-      console.error("❌ No imageBase64 in request");
       return new Response(
         JSON.stringify({ error: "No image provided (need imageBase64)" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // ✅ Step 1: Clean up the card (simulate background removal & sharpening)
-    console.log("👉 Calling OpenAI images.generate for cleanup...");
+    // 🔹 Step 1: Generate cleaned card image
+    console.log("👉 Generating cleaned insurance card image...");
     const cleaned = await client.images.generate({
       model: "gpt-image-1",
-      prompt: `Clean this insurance card photo. Keep only the card, remove the background, and sharpen text. 
-Here is the raw image in base64: ${body.imageBase64}`,
+      prompt: "Crop to the insurance card, remove background, sharpen text.",
       size: "512x512",
-      response_format: "b64_json"
+      input: [{ data: body.imageBase64, mime_type: "image/jpeg" }]
     });
 
     const cleanedBase64 = cleaned.data[0].b64_json;
-    console.log("👉 Got cleaned image from OpenAI (length:", cleanedBase64?.length, ")");
+    console.log("👉 Got cleaned image, length:", cleanedBase64?.length);
 
-    // ✅ Step 2: Extract structured info from the card using GPT
-    console.log("👉 Calling OpenAI chat.completions for metadata extraction...");
+    // 🔹 Step 2: Extract metadata
+    console.log("👉 Running GPT metadata extraction...");
     const visionResp = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
         {
           role: "system",
-          content: `You are an assistant that extracts structured information from an insurance card.
-Always return valid JSON with keys:
-{
-  "carrier": "string",
-  "policy": "string",
-  "memberId": "string",
-  "group": "string",
-  "side": "front" | "back"
-}`
+          content: `Extract structured info from an insurance card. 
+Return ONLY JSON with these keys:
+{ "carrier": "", "policy": "", "memberId": "", "group": "", "side": "" }`
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract insurance card information from this image (base64 included)." },
-            { type: "text", text: body.imageBase64 }
+            { type: "text", text: "Extract insurance card details." },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${cleanedBase64}` } }
           ]
         }
       ],
-      max_tokens: 400,
-      response_format: { type: "json_object" }
+      max_tokens: 400
     });
 
     let parsed = {};
     try {
       parsed = JSON.parse(visionResp.choices[0].message.content || "{}");
-    } catch (e) {
-      console.error("❌ Failed to parse JSON from GPT:", visionResp.choices[0].message.content);
+    } catch {
       parsed = {};
     }
 
-    // ✅ Normalize fields
     const normalized = {
       carrier: parsed.carrier || "",
       policy: parsed.policy || "",
@@ -86,7 +73,6 @@ Always return valid JSON with keys:
 
     console.log("👉 Extracted metadata:", normalized);
 
-    // ✅ Return cleaned image + extracted info
     return new Response(
       JSON.stringify({
         card_image_base64: cleanedBase64,
