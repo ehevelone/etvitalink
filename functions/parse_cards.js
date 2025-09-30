@@ -46,13 +46,15 @@ Always return JSON like:
         }
       ],
       max_tokens: 500,
-      response_format: { type: "json_object" }
+      // 🚨 Important: "response_format" is not supported in chat.completions in Node SDK v5
+      // Instead, we just parse the JSON ourselves
     });
 
     let parsed = {};
     try {
       parsed = JSON.parse(visionResp.choices[0].message.content || "{}");
-    } catch {
+    } catch (e) {
+      console.error("AI JSON parse failed:", e);
       parsed = {};
     }
 
@@ -61,16 +63,20 @@ Always return JSON like:
     // ✅ Step 2: Crop with Sharp
     let croppedBase64;
     try {
-      const cropped = await sharp(imageBuffer)
-        .extract({ left: x, top: y, width, height })
-        .resize(512, 512, { fit: "cover" })
-        .png()
-        .toBuffer();
-
-      croppedBase64 = cropped.toString("base64");
+      if (width > 0 && height > 0) {
+        const cropped = await sharp(imageBuffer)
+          .extract({ left: x, top: y, width, height })
+          .resize(512, 512, { fit: "cover" })
+          .png()
+          .toBuffer();
+        croppedBase64 = cropped.toString("base64");
+      } else {
+        // fallback if no bounding box from AI
+        croppedBase64 = body.imageBase64;
+      }
     } catch (e) {
       console.error("Sharp crop error:", e);
-      croppedBase64 = body.imageBase64; // fallback = original
+      croppedBase64 = body.imageBase64;
     }
 
     // ✅ Step 3: Normalize meta

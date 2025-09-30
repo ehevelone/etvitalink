@@ -10,11 +10,12 @@
     "pg",
     "nodemailer",
     "qrcode",
-    "bcryptjs"
+    "bcryptjs",
+    "sharp"
   ]
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
