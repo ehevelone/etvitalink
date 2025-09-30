@@ -10,6 +10,7 @@ export default async (req) => {
     try {
       body = JSON.parse(raw);
     } catch {
+      console.error("❌ Invalid JSON:", raw);
       return new Response(
         JSON.stringify({ error: "Invalid JSON body", received: raw }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -17,28 +18,28 @@ export default async (req) => {
     }
 
     if (!body.imageBase64) {
+      console.error("❌ No imageBase64 in request");
       return new Response(
         JSON.stringify({ error: "No image provided (need imageBase64)" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log("👉 Received base64 image, length:", body.imageBase64.length);
-
-    // ✅ Step 1: Clean up the card (background removal, sharpen, resize)
-    const cleaned = await client.images.edits({
+    // ✅ Step 1: Clean up the card (simulate background removal & sharpening)
+    console.log("👉 Calling OpenAI images.generate for cleanup...");
+    const cleaned = await client.images.generate({
       model: "gpt-image-1",
-      prompt:
-        "Clean this insurance card photo. Keep only the card, remove background, sharpen text.",
-      image: [`data:image/jpeg;base64,${body.imageBase64}`],
+      prompt: `Clean this insurance card photo. Keep only the card, remove the background, and sharpen text. 
+Here is the raw image in base64: ${body.imageBase64}`,
       size: "512x512",
-      response_format: "b64_json",
+      response_format: "b64_json"
     });
 
     const cleanedBase64 = cleaned.data[0].b64_json;
-    console.log("👉 Cleaned image generated, length:", cleanedBase64.length);
+    console.log("👉 Got cleaned image from OpenAI (length:", cleanedBase64?.length, ")");
 
-    // ✅ Step 2: Extract structured info from the cleaned card
+    // ✅ Step 2: Extract structured info from the card using GPT
+    console.log("👉 Calling OpenAI chat.completions for metadata extraction...");
     const visionResp = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -52,31 +53,27 @@ Always return valid JSON with keys:
   "memberId": "string",
   "group": "string",
   "side": "front" | "back"
-}`,
+}`
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract insurance card information." },
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${cleanedBase64}` },
-            },
-          ],
-        },
+            { type: "text", text: "Extract insurance card information from this image (base64 included)." },
+            { type: "text", text: body.imageBase64 }
+          ]
+        }
       ],
       max_tokens: 400,
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }
     });
 
     let parsed = {};
     try {
       parsed = JSON.parse(visionResp.choices[0].message.content || "{}");
-    } catch {
+    } catch (e) {
+      console.error("❌ Failed to parse JSON from GPT:", visionResp.choices[0].message.content);
       parsed = {};
     }
-
-    console.log("👉 Parsed JSON:", parsed);
 
     // ✅ Normalize fields
     const normalized = {
@@ -84,23 +81,26 @@ Always return valid JSON with keys:
       policy: parsed.policy || "",
       memberId: parsed.memberId || "",
       group: parsed.group || "",
-      side: parsed.side || "front",
+      side: parsed.side || "front"
     };
+
+    console.log("👉 Extracted metadata:", normalized);
 
     // ✅ Return cleaned image + extracted info
     return new Response(
       JSON.stringify({
         card_image_base64: cleanedBase64,
-        meta: normalized,
+        meta: normalized
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
+
   } catch (err) {
-    console.error("parse_cards error:", err);
+    console.error("❌ parse_cards error:", err);
     return new Response(
       JSON.stringify({
-        error: err.message,
-        details: err.response?.data || null,
+        error: err.message || "Unknown error",
+        details: err.response?.data || null
       }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
