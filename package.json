@@ -2,6 +2,7 @@
   "name": "vitalink-backend",
   "version": "1.0.0",
   "description": "",
+  "type": "module",                       // ✅ tell Node/Netlify this is ESM
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^3.3.2",               // ✅ works in ESM
     "nodemailer": "^6.9.8",
     "openai": "^5.20.2",
     "pg": "^8.16.3",
