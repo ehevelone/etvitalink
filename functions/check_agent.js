@@ -1,5 +1,5 @@
 // functions/check_agent.js
-const db = require("./services/db");
+const db = require("../services/db");   // <-- fixed path
 const crypto = require("crypto");
 
 function hashPassword(password) {
@@ -31,10 +31,9 @@ exports.handler = async (event) => {
     }
 
     // 🔎 Look up agent by email
-    const result = await db.query(
-      "SELECT * FROM agents WHERE email=$1",
-      [email]
-    );
+    const result = await db.query("SELECT * FROM agents WHERE email=$1", [
+      email,
+    ]);
 
     if (!result.rows.length) {
       return fail("No account found with this email.");

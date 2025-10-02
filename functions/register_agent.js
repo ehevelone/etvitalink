@@ -1,5 +1,5 @@
 // functions/register_agent.js
-const db = require("./services/db");
+const db = require("../services/db");   // <-- fixed path
 const crypto = require("crypto");
 
 function hashPassword(password) {
@@ -48,10 +48,9 @@ exports.handler = async (event) => {
     }
 
     // 🔎 Check for duplicate email
-    const dupCheck = await db.query(
-      "SELECT id FROM agents WHERE email=$1",
-      [email]
-    );
+    const dupCheck = await db.query("SELECT id FROM agents WHERE email=$1", [
+      email,
+    ]);
 
     if (dupCheck.rows.length > 0) {
       return fail("This email is already registered. Please log in instead.");
