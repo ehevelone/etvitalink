@@ -1,5 +1,5 @@
 // functions/claimAgentUnlock.js
-const db = require("./services/db");
+const db = require("../services/db");
 const bcrypt = require("bcryptjs");
 
 exports.handler = async (event) => {
@@ -46,7 +46,7 @@ exports.handler = async (event) => {
     // ✅ Hash password before storing
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Update agent row with real data
+    // ✅ Update agent row
     const result = await db.query(
       `UPDATE agents
        SET email = $1,

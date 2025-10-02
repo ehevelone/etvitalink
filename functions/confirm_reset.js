@@ -1,5 +1,5 @@
 // functions/confirm_reset.js
-const db = require("./services/db");
+const db = require("../services/db");
 const crypto = require("crypto");
 
 function hashPassword(password) {
@@ -17,10 +17,10 @@ exports.handler = async (event) => {
       };
     }
 
-    const result = await db.query(
-      "SELECT * FROM agents WHERE email=$1 AND reset_code=$2",
-      [email, code]
-    );
+    const result = await db.query("SELECT * FROM agents WHERE email=$1 AND reset_code=$2", [
+      email,
+      code,
+    ]);
 
     if (!result.rows.length) {
       return {

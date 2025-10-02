@@ -1,5 +1,5 @@
 // functions/check_user.js
-const db = require("./services/db");
+const db = require("../services/db");
 const crypto = require("crypto");
 
 function hashPassword(password) {
@@ -8,7 +8,7 @@ function hashPassword(password) {
 
 function reply(success, obj = {}) {
   return {
-    statusCode: 200, // ✅ always 200 so Flutter can parse it
+    statusCode: 200,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ success, ...obj }),
   };
@@ -22,11 +22,7 @@ exports.handler = async (event) => {
       return reply(false, { error: "Username and password required ❌" });
     }
 
-    // Look up user in DB
-    const result = await db.query(
-      "SELECT * FROM users WHERE username=$1",
-      [username]
-    );
+    const result = await db.query("SELECT * FROM users WHERE username=$1", [username]);
 
     if (!result.rows.length) {
       return reply(false, { error: "No user exists, please register first." });
@@ -39,7 +35,6 @@ exports.handler = async (event) => {
       return reply(false, { error: "Invalid password ❌" });
     }
 
-    // ✅ Success
     return reply(true, {
       message: "User login successful ✅",
       userId: user.id,

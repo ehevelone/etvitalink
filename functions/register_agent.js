@@ -1,5 +1,5 @@
 // functions/register_agent.js
-const db = require("../services/db");   // <-- fixed path
+const db = require("../services/db");
 const crypto = require("crypto");
 
 function hashPassword(password) {
@@ -31,10 +31,7 @@ exports.handler = async (event) => {
     }
 
     // 🔎 Validate unlock code
-    const codeResult = await db.query(
-      "SELECT * FROM promo_codes WHERE code=$1",
-      [unlockCode]
-    );
+    const codeResult = await db.query("SELECT * FROM promo_codes WHERE code=$1", [unlockCode]);
 
     if (!codeResult.rows.length) {
       return fail("Invalid unlock code ❌");
@@ -48,9 +45,7 @@ exports.handler = async (event) => {
     }
 
     // 🔎 Check for duplicate email
-    const dupCheck = await db.query("SELECT id FROM agents WHERE email=$1", [
-      email,
-    ]);
+    const dupCheck = await db.query("SELECT id FROM agents WHERE email=$1", [email]);
 
     if (dupCheck.rows.length > 0) {
       return fail("This email is already registered. Please log in instead.");
@@ -71,24 +66,17 @@ exports.handler = async (event) => {
 
     // 🔄 Handle unlock code
     if (unlockCode !== "1111") {
-      // For normal codes → redeem once
       await db.query(
         "UPDATE promo_codes SET redeemed=true, agent_id=$1 WHERE id=$2",
         [row.id, codeRow.id]
       );
     }
 
-    // Always track usage count (even for master code)
-    await db.query(
-      "UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1",
-      [codeRow.id]
-    );
+    // Always track usage count
+    await db.query("UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1", [codeRow.id]);
 
     // Generate permanent promo code for this agent
-    const agentCode = `AGT-${Math.random()
-      .toString(36)
-      .substring(2, 8)
-      .toUpperCase()}`;
+    const agentCode = `AGT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     await db.query(
       `INSERT INTO promo_codes (code, agent_id, max_uses)
