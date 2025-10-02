@@ -1,5 +1,6 @@
 // functions/report_usage.js
-const db = require("./services/db");
+const db = require("../services/db");
+
 
 function ok(obj) {
   return {
