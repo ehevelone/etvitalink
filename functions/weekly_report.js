@@ -1,5 +1,5 @@
-// functions/weeklyReport.js
-const db = require("./services/db");
+// functions/weekly_report.js
+const db = require("../services/db");  // ✅ corrected path
 const nodemailer = require("nodemailer");
 
 exports.handler = async () => {
@@ -30,7 +30,7 @@ exports.handler = async () => {
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS, // ← app password is in Netlify EVs
+        pass: process.env.SMTP_PASS,
       },
     });
 
