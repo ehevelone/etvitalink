@@ -1,5 +1,5 @@
 // functions/request_reset.js
-const db = require("./services/db");
+const db = require("../services/db");   // ✅ fixed path
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
@@ -24,8 +24,8 @@ exports.handler = async (event) => {
     }
 
     // Generate reset code
-    const resetCode = crypto.randomBytes(3).toString("hex").toUpperCase(); // 6-char code
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins from now
+    const resetCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     await db.query(
       `UPDATE agents SET reset_code=$1, reset_expires=$2 WHERE email=$3`,
@@ -39,7 +39,7 @@ exports.handler = async (event) => {
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS, // set in Netlify env
+        pass: process.env.SMTP_PASS,
       },
     });
 
