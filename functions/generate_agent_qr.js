@@ -1,5 +1,5 @@
 // functions/generateAgentQR.js
-const db = require("./services/db");
+const db = require("../services/db");
 const QRCode = require("qrcode");
 const crypto = require("crypto");
 
@@ -14,10 +14,13 @@ function generateCode(prefix = "PROMO", length = 6) {
 
 exports.handler = async (event) => {
   try {
-    const { agentId } = JSON.parse(event.body);
+    const { agentId } = JSON.parse(event.body || "{}");
 
     if (!agentId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "agentId required" }) };
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "agentId required" }),
+      };
     }
 
     // 1. Generate promo code
@@ -44,6 +47,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
+    console.error("❌ generateAgentQR error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),

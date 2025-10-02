@@ -1,5 +1,4 @@
-// functions/verify_agent.js
-const db = require("./services/db"); // optional, only if DB is connected
+const db = require("../services/db"); // fixed path
 
 function ok(obj) {
   return {
@@ -19,14 +18,12 @@ function fail(msg) {
 
 exports.handler = async (event) => {
   try {
-    console.log("RAW EVENT BODY:", event.body); // 👀 debug log
+    console.log("RAW EVENT BODY:", event.body);
 
-    // ✅ Safe body parsing: supports JSON and form-encoded
     let body = {};
     try {
-      body = JSON.parse(event.body || "{}"); // normal JSON
+      body = JSON.parse(event.body || "{}");
     } catch {
-      // fallback: form-encoded
       body = Object.fromEntries(new URLSearchParams(event.body || ""));
     }
 
@@ -36,7 +33,6 @@ exports.handler = async (event) => {
       return fail("Missing username or unlock code");
     }
 
-    // 🚨 Master seed unlock code (bootstraps first agents)
     if (unlockCode === "Traci-2021") {
       return ok({
         success: true,
@@ -45,7 +41,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // --- If DB available, validate against table ---
     try {
       const result = await db.query(
         "SELECT * FROM agent_codes WHERE code=$1",
@@ -58,18 +53,15 @@ exports.handler = async (event) => {
 
       const row = result.rows[0];
 
-      // Usage limits
       if (row.max_uses !== null && row.used_count >= row.max_uses) {
         return fail("Unlock code usage limit reached ❌");
       }
 
-      // Increment usage count
       await db.query(
         "UPDATE agent_codes SET used_count = used_count + 1 WHERE code=$1",
         [unlockCode]
       );
 
-      // Log redemption
       await db.query(
         "INSERT INTO agent_redemptions (username, code, redeemed_at) VALUES ($1, $2, NOW())",
         [username, unlockCode]

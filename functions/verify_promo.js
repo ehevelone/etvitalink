@@ -1,5 +1,4 @@
-// functions/verify_promo.js
-const db = require("./services/db");
+const db = require("../services/db"); // fixed path
 
 function ok(obj) {
   return {
@@ -25,7 +24,6 @@ exports.handler = async (event) => {
       return fail("Username and promo code are required.");
     }
 
-    // 🔎 Look up promo code & agent
     const result = await db.query(
       `SELECT pc.id as promo_id, pc.code, pc.agent_id,
               a.id as agent_id, a.email as agent_email, a.npn,
@@ -42,12 +40,10 @@ exports.handler = async (event) => {
 
     const row = result.rows[0];
 
-    // ✅ Optional: enforce active status
     if (!row.active) {
       return fail("This agent is not active ❌");
     }
 
-    // ✅ Track usage
     await db.query(
       "UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1",
       [row.promo_id]

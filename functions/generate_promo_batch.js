@@ -1,6 +1,6 @@
 // functions/generatePromoBatch.js
 const crypto = require("crypto");
-const db = require("./services/db"); // ✅ path to db.js
+const db = require("../services/db"); // ✅ correct relative path
 
 function generateCode(prefix = "PROMO", length = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
@@ -13,7 +13,7 @@ function generateCode(prefix = "PROMO", length = 6) {
 
 exports.handler = async (event) => {
   try {
-    const { prefix, count, maxUses, agentId } = JSON.parse(event.body);
+    const { prefix, count, maxUses, agentId } = JSON.parse(event.body || "{}");
 
     // Defaults
     const safePrefix = prefix || "PROMO";
@@ -44,6 +44,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
+    console.error("❌ generatePromoBatch error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),

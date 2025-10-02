@@ -1,9 +1,9 @@
 // functions/generateAgentUnlock.js
-const db = require("./services/db");
+const db = require("../services/db");  // ✅ corrected path
 const crypto = require("crypto");
 
 function generateUnlockCode(prefix = "AG", length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
   let code = "";
   for (let i = 0; i < length; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -44,7 +44,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
-    console.error("Error generating agent unlock:", err);
+    console.error("❌ Error generating agent unlock:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ success: false, error: "Server error" }),
