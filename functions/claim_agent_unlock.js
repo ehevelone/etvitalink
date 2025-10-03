@@ -30,7 +30,7 @@ exports.handler = async (event) => {
       return fail("Unlock code, email, password, and NPN are required.");
     }
 
-    // 1. Look up the placeholder agent row
+    // 1. Look up placeholder agent row
     const existing = await db.query(
       `SELECT id, active FROM agents WHERE unlock_code = $1`,
       [unlockCode]
@@ -48,15 +48,14 @@ exports.handler = async (event) => {
     // 2. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Activate the agent and update details (match DB schema: no 'name')
+    // 3. Activate the agent and update details
     const result = await db.query(
       `UPDATE agents
        SET email = $1,
            password_hash = $2,
            npn = $3,
            phone = $4,
-           active = TRUE,
-           updated_at = NOW()
+           active = TRUE
        WHERE id = $5
        RETURNING id, email, npn, phone, role, active`,
       [email, hashedPassword, npn, phone || null, agent.id]
@@ -64,7 +63,7 @@ exports.handler = async (event) => {
 
     const row = result.rows[0];
 
-    // 4. Mark the unlock code as redeemed in promo_codes table
+    // 4. Mark unlock code as redeemed in promo_codes
     await db.query(
       `UPDATE promo_codes
        SET redeemed = TRUE, agent_id = $1, used_count = used_count + 1
