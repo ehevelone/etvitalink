@@ -26,7 +26,7 @@ exports.handler = async (event) => {
 
     const result = await db.query(
       `SELECT pc.id as promo_id, pc.code, pc.agent_id,
-              a.id as agent_id, a.email as agent_email, a.npn,
+              a.id as agent_id, a.email as agent_email,
               a.role, a.active
        FROM promo_codes pc
        LEFT JOIN agents a ON pc.agent_id = a.id
@@ -44,6 +44,7 @@ exports.handler = async (event) => {
       return fail("This agent is not active ❌");
     }
 
+    // increment usage
     await db.query(
       "UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1",
       [row.promo_id]
@@ -55,7 +56,6 @@ exports.handler = async (event) => {
       agent: {
         id: row.agent_id,
         email: row.agent_email,
-        npn: row.npn,
         role: row.role,
         active: row.active,
       },

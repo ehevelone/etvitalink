@@ -30,7 +30,6 @@ exports.handler = async (event) => {
       return fail("Missing email or password.");
     }
 
-    // 🔎 Look up agent by email
     const result = await db.query("SELECT * FROM agents WHERE email=$1", [email]);
 
     if (!result.rows.length) {
@@ -50,7 +49,7 @@ exports.handler = async (event) => {
 
     return ok({
       message: "Agent login successful ✅",
-      agentId: agent.id,
+      agentId: agent.id,   // 👈 consistent
       email: agent.email,
       role: agent.role,
       active: agent.active,
