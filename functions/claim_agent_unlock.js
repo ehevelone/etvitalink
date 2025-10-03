@@ -24,7 +24,7 @@ exports.handler = async (event) => {
       return fail("Method not allowed", 405);
     }
 
-    const { unlockCode, email, password, npn, phone, name } = JSON.parse(event.body || "{}");
+    const { unlockCode, email, password, npn, phone } = JSON.parse(event.body || "{}");
 
     if (!unlockCode || !email || !password || !npn) {
       return fail("Unlock code, email, password, and NPN are required.");
@@ -48,24 +48,23 @@ exports.handler = async (event) => {
     // 2. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Activate the agent and update details
+    // 3. Activate the agent and update details (match DB schema: no 'name')
     const result = await db.query(
       `UPDATE agents
        SET email = $1,
            password_hash = $2,
            npn = $3,
            phone = $4,
-           name = $5,
            active = TRUE,
            updated_at = NOW()
-       WHERE id = $6
-       RETURNING id, email, npn, phone, name, role, active`,
-      [email, hashedPassword, npn, phone || null, name || null, agent.id]
+       WHERE id = $5
+       RETURNING id, email, npn, phone, role, active`,
+      [email, hashedPassword, npn, phone || null, agent.id]
     );
 
     const row = result.rows[0];
 
-    // 4. Mark the unlock code as redeemed in promo_codes table if desired
+    // 4. Mark the unlock code as redeemed in promo_codes table
     await db.query(
       `UPDATE promo_codes
        SET redeemed = TRUE, agent_id = $1, used_count = used_count + 1
@@ -78,7 +77,6 @@ exports.handler = async (event) => {
       email: row.email,
       npn: row.npn,
       phone: row.phone,
-      name: row.name,
       role: row.role,
       active: row.active,
     });
