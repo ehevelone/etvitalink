@@ -30,7 +30,7 @@ exports.handler = async (event) => {
       [unlockCode]
     );
 
-    // If request has Accept: application/json → return JSON (for app)
+    // ✅ If request comes from the app → return JSON
     if (event.headers.accept && event.headers.accept.includes("application/json")) {
       return {
         statusCode: 200,
@@ -43,42 +43,47 @@ exports.handler = async (event) => {
       };
     }
 
-    // Otherwise → return an HTML landing page (for browsers / QR scan)
-    const playStoreLink = "https://play.google.com/store/apps/details?id=com.vitalink.app";
-    const regPageLink = `https://vitalink-app.netlify.app/agent-registration?code=${unlockCode}`;
+    // ✅ Otherwise → redirect into app with fallback
+    const deepLink = `vitalink://agent/onboard?code=${unlockCode}`;
+    const playStoreLink =
+      "https://play.google.com/store/apps/details?id=com.vitalink.app";
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8"/>
-        <title>VitaLink Agent Unlock</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; margin: 40px; }
-          .code { font-size: 24px; font-weight: bold; color: #0077cc; margin: 20px 0; }
-          a.button {
-            display: inline-block; padding: 12px 20px; margin: 10px;
-            background: #0077cc; color: white; text-decoration: none; border-radius: 6px;
-          }
-        </style>
-      </head>
-      <body>
-        <h2>Welcome to VitaLink</h2>
-        <p>Your unique agent unlock code:</p>
-        <div class="code">${unlockCode}</div>
-        <p>If you already downloaded the VitaLink app, open it and paste this code to register.</p>
-        <p>
-          <a href="${playStoreLink}" class="button">📥 Download VitaLink</a>
-          <a href="${regPageLink}" class="button">➡️ Register Now</a>
-        </p>
-      </body>
-      </html>
-    `;
-
+    // Try deep link first (302 redirect). If app isn’t installed → fallback to HTML
     return {
-      statusCode: 200,
-      headers: { "Content-Type": "text/html" },
-      body: html,
+      statusCode: 302,
+      headers: {
+        Location: deepLink,
+        "Content-Type": "text/html",
+      },
+      body: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <title>VitaLink Agent Unlock</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; margin: 40px; }
+            .code { font-size: 24px; font-weight: bold; color: #0077cc; margin: 20px 0; }
+            a.button {
+              display: inline-block; padding: 12px 20px; margin: 10px;
+              background: #0077cc; color: white; text-decoration: none; border-radius: 6px;
+            }
+            a.secondary { background: #555; }
+          </style>
+        </head>
+        <body>
+          <h2>Welcome to VitaLink</h2>
+          <p>Your unique agent unlock code:</p>
+          <div class="code">${unlockCode}</div>
+          <p>If you already downloaded the VitaLink app, it should open automatically.<br/>
+             If not, use the buttons below:</p>
+          <p>
+            <a href="${deepLink}" class="button">➡️ Open in App</a>
+            <a href="${playStoreLink}" class="button secondary">📥 Download VitaLink</a>
+          </p>
+        </body>
+        </html>
+      `,
     };
   } catch (err) {
     console.error("❌ Error generating new agent code:", err);
