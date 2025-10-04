@@ -39,15 +39,30 @@
     }
   </style>
   <script>
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+
     function openApp() {
+      const code = getQueryParam("code");
+      const deepLink = code
+        ? `vitalink://agent/onboard?code=${encodeURIComponent(code)}`
+        : "vitalink://agent/onboard";
+
       // Try to open VitaLink app
-      window.location = "vitalink://agent/onboard";
+      window.location = deepLink;
 
       // Fallback after 2 seconds → show download buttons
       setTimeout(function () {
         document.getElementById("fallback").style.display = "block";
+        if (code) {
+          document.getElementById("unlockCode").innerText = code;
+          document.getElementById("unlockBox").style.display = "block";
+        }
       }, 2000);
     }
+
     window.onload = openApp;
   </script>
 </head>
@@ -55,6 +70,12 @@
   <img src="/vitalink-logo-1.png" alt="VitaLink Logo" class="logo" />
   <h1>Opening VitaLink…</h1>
   <p>If you already have the app installed, it should open automatically.</p>
+
+  <!-- Unlock code display if app isn't installed -->
+  <div id="unlockBox" style="display: none; margin: 20px 0;">
+    <p>Your unlock code:</p>
+    <div id="unlockCode" style="font-size: 22px; font-weight: bold; color:#0077cc;"></div>
+  </div>
 
   <div id="fallback" style="display: none;">
     <p>Don’t have the app yet? Download it here:</p>
