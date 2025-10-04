@@ -1,11 +1,17 @@
 // functions/new_agent_code.js
 const db = require("../services/db");
-const { v4: uuidv4 } = require("uuid");
+
+// ✅ Simple random alphanumeric generator (8 chars, A-Z0-9)
+function generateUnlockCode() {
+  return Array.from({ length: 8 }, () =>
+    Math.floor(Math.random() * 36).toString(36).toUpperCase()
+  ).join("");
+}
 
 exports.handler = async (event) => {
   try {
-    // Generate a random unlock code (8 chars)
-    const unlockCode = uuidv4().replace(/-/g, "").slice(0, 8).toUpperCase();
+    // Generate a random unlock code
+    const unlockCode = generateUnlockCode();
 
     // Create stub agent row
     const agentResult = await db.query(
