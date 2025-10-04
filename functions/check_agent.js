@@ -1,10 +1,6 @@
 // functions/check_agent.js
 const db = require("../services/db");
-const crypto = require("crypto");
-
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
+const bcrypt = require("bcryptjs");
 
 function ok(obj) {
   return {
@@ -14,9 +10,9 @@ function ok(obj) {
   };
 }
 
-function fail(msg) {
+function fail(msg, code = 400) {
   return {
-    statusCode: 400,
+    statusCode: code,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ success: false, error: msg }),
   };
@@ -37,9 +33,10 @@ exports.handler = async (event) => {
     }
 
     const agent = result.rows[0];
-    const hashed = hashPassword(password);
 
-    if (agent.password_hash !== hashed) {
+    // ✅ Compare entered password with bcrypt hash
+    const isMatch = await bcrypt.compare(password, agent.password_hash);
+    if (!isMatch) {
       return fail("Invalid password ❌");
     }
 
@@ -49,7 +46,7 @@ exports.handler = async (event) => {
 
     return ok({
       message: "Agent login successful ✅",
-      agentId: agent.id,   // 👈 consistent
+      agentId: agent.id,
       email: agent.email,
       role: agent.role,
       active: agent.active,
