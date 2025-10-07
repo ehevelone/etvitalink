@@ -1,7 +1,6 @@
-// ✅ functions/request_reset.js
+// functions/request_reset.js
 const db = require("../services/db");
 const nodemailer = require("nodemailer");
-const twilio = require("twilio"); // for SMS
 
 function ok(obj) {
   return {
@@ -21,31 +20,46 @@ function fail(msg, code = 400) {
 
 exports.handler = async (event) => {
   try {
-    const { emailOrPhone } = JSON.parse(event.body || "{}");
-    if (!emailOrPhone) return fail("Missing email or phone number.");
+    if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
-    // 1️⃣ Lookup agent by email OR phone
-    const result = await db.query(
-      `SELECT id, email, phone FROM agents WHERE email = $1 OR phone = $1 LIMIT 1`,
+    const { emailOrPhone } = JSON.parse(event.body || "{}");
+    if (!emailOrPhone) return fail("Email is required ❌");
+
+    // 🔢 Generate a 6-digit reset code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 🔎 Find the account in 'agents' or 'users' table
+    let user;
+    const agentRes = await db.query(
+      `SELECT id, email, role FROM agents WHERE email = $1`,
       [emailOrPhone]
     );
 
-    if (!result.rows.length) return fail("Account not found ❌");
-    const agent = result.rows[0];
+    if (agentRes.rows.length > 0) {
+      user = agentRes.rows[0];
+    } else {
+      const userRes = await db.query(
+        `SELECT id, email, role FROM users WHERE email = $1`,
+        [emailOrPhone]
+      );
+      if (userRes.rows.length > 0) {
+        user = userRes.rows[0];
+      }
+    }
 
-    // 2️⃣ Generate 6-digit reset code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    if (!user) return fail("No account found for this email ❌", 404);
 
+    // 🕒 Store code with 20-minute expiration
     await db.query(
-      `UPDATE agents SET reset_code = $1, reset_expires = $2 WHERE id = $3`,
-      [code, expires, agent.id]
+      `INSERT INTO reset_codes (user_id, code, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '20 MINUTES')`,
+      [user.id, resetCode]
     );
 
-    // 3️⃣ Send via Email
+    // 📧 Send email with reset code
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || "587", 10),
+      port: process.env.SMTP_PORT,
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
@@ -53,42 +67,33 @@ exports.handler = async (event) => {
       },
     });
 
-    if (agent.email) {
-      await transporter.sendMail({
-        from: `"VitaLink" <${process.env.SMTP_USER}>`,
-        to: agent.email,
-        subject: "Your VitaLink Password Reset Code",
-        text: `Hello,
+    const mailBody = `
+      Hi there,
 
-Your password reset code is: ${code}
+      Your VitaLink password reset code is: ${resetCode}
 
-This code will expire in 15 minutes.
+      This code will expire in 20 minutes.
+      If you didn’t request this, please ignore this email.
 
-If you didn’t request this, please ignore this message.
+      – VitaLink Support
+    `;
 
-— VitaLink Support`,
-      });
-    }
+    await transporter.sendMail({
+      from: `"VitaLink Support" <${process.env.SMTP_USER}>`,
+      to: user.email,
+      subject: "Your VitaLink Password Reset Code",
+      text: mailBody,
+    });
 
-    // 4️⃣ Send via SMS (optional)
-    if (agent.phone && process.env.TWILIO_SID && process.env.TWILIO_TOKEN) {
-      const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
-      await client.messages.create({
-        body: `VitaLink reset code: ${code} (expires in 15 min)`,
-        from: process.env.TWILIO_PHONE,
-        to: agent.phone,
-      });
-    }
+    console.log(`✅ Sent reset code ${resetCode} to ${user.email}`);
 
     return ok({
-      message: "Reset code sent ✅",
-      delivery: {
-        email: !!agent.email,
-        sms: !!agent.phone,
-      },
+      message: "Reset code sent successfully ✅",
+      expiresIn: "20 minutes",
+      sentTo: user.email,
     });
   } catch (err) {
-    console.error("❌ request_reset error:", err);
-    return fail("Server error: " + err.message, 500);
+    console.error("❌ Error in request_reset:", err);
+    return fail("Server error while sending reset code ❌");
   }
 };
