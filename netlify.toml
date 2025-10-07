@@ -1,22 +1,46 @@
+# ============================
+# ✅ Netlify Build Configuration
+# ============================
+
 [build]
+  # The folder Netlify will deploy publicly (for static files)
   publish = "public"
+
+  # No frontend build step (serverless backend only)
   command = "echo 'No frontend build step needed'"
 
+# ============================
+# ✅ Serverless Functions Setup
+# ============================
 [functions]
+  # Folder containing all your Netlify Functions
   directory = "functions"
+
+  # Use esbuild for fast bundling
   node_bundler = "esbuild"
-  # ✅ Include all Node dependencies your functions use
+
+  # ✅ Include all Node dependencies that your functions import
   external_node_modules = [
-    "pg",
-    "nodemailer",
-    "qrcode",
-    "bcryptjs",
-    "sharp"
+    "pg",          # PostgreSQL
+    "nodemailer",  # Email sending
+    "qrcode",      # QR code generation
+    "bcryptjs",    # Password hashing
+    "sharp",       # Image processing
+    "twilio"       # ✅ SMS service for password resets
   ]
 
+# ============================
+# ✅ Environment Configuration
+# ============================
 [build.environment]
   NODE_VERSION = "20"
+
+  # Email sending configuration (do NOT include password here)
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
-  # 🚨 Do NOT put SMTP_PASS here — keep it in Netlify Environment Variables
+
+  # 🚨 IMPORTANT:
+  # Keep all secrets like SMTP_PASS, OPENAI_API_KEY, SUPABASE_URL, etc.
+  # inside Netlify → Site Settings → Environment Variables.
+  # Never hardcode passwords or keys into this file.
