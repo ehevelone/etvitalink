@@ -44,10 +44,13 @@ exports.handler = async (event) => {
       return fail("This account has been disabled.");
     }
 
+    // ✅ Send back full contact info so app can update profile
     return ok({
       message: "Agent login successful ✅",
       agentId: agent.id,
       email: agent.email,
+      name: agent.name || null,
+      phone: agent.phone || null,
       role: agent.role,
       active: agent.active,
     });

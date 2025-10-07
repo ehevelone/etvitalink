@@ -1,41 +1,51 @@
-// functions/request_reset.js
-const db = require("../services/db");   // ✅ fixed path
+// ✅ functions/request_reset.js
+const db = require("../services/db");
 const nodemailer = require("nodemailer");
-const crypto = require("crypto");
+const twilio = require("twilio"); // for SMS
+
+function ok(obj) {
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: true, ...obj }),
+  };
+}
+
+function fail(msg, code = 400) {
+  return {
+    statusCode: code,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: false, error: msg }),
+  };
+}
 
 exports.handler = async (event) => {
   try {
-    const { email } = JSON.parse(event.body || "{}");
+    const { emailOrPhone } = JSON.parse(event.body || "{}");
+    if (!emailOrPhone) return fail("Missing email or phone number.");
 
-    if (!email) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ success: false, error: "Missing email" }),
-      };
-    }
-
-    // Check if agent exists
-    const result = await db.query("SELECT * FROM agents WHERE email=$1", [email]);
-    if (!result.rows.length) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ success: false, error: "No account found with this email" }),
-      };
-    }
-
-    // Generate reset code
-    const resetCode = crypto.randomBytes(3).toString("hex").toUpperCase();
-    const expires = new Date(Date.now() + 15 * 60 * 1000);
-
-    await db.query(
-      `UPDATE agents SET reset_code=$1, reset_expires=$2 WHERE email=$3`,
-      [resetCode, expires, email]
+    // 1️⃣ Lookup agent by email OR phone
+    const result = await db.query(
+      `SELECT id, email, phone FROM agents WHERE email = $1 OR phone = $1 LIMIT 1`,
+      [emailOrPhone]
     );
 
-    // Send email
+    if (!result.rows.length) return fail("Account not found ❌");
+    const agent = result.rows[0];
+
+    // 2️⃣ Generate 6-digit reset code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+
+    await db.query(
+      `UPDATE agents SET reset_code = $1, reset_expires = $2 WHERE id = $3`,
+      [code, expires, agent.id]
+    );
+
+    // 3️⃣ Send via Email
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
+      port: parseInt(process.env.SMTP_PORT || "587", 10),
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
@@ -43,22 +53,42 @@ exports.handler = async (event) => {
       },
     });
 
-    await transporter.sendMail({
-      from: `"VitaLink Support" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "VitaLink Password Reset",
-      text: `Here is your password reset code: ${resetCode}\n\nThis code will expire in 15 minutes.`,
-    });
+    if (agent.email) {
+      await transporter.sendMail({
+        from: `"VitaLink" <${process.env.SMTP_USER}>`,
+        to: agent.email,
+        subject: "Your VitaLink Password Reset Code",
+        text: `Hello,
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true, message: "Reset code sent" }),
-    };
+Your password reset code is: ${code}
+
+This code will expire in 15 minutes.
+
+If you didn’t request this, please ignore this message.
+
+— VitaLink Support`,
+      });
+    }
+
+    // 4️⃣ Send via SMS (optional)
+    if (agent.phone && process.env.TWILIO_SID && process.env.TWILIO_TOKEN) {
+      const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+      await client.messages.create({
+        body: `VitaLink reset code: ${code} (expires in 15 min)`,
+        from: process.env.TWILIO_PHONE,
+        to: agent.phone,
+      });
+    }
+
+    return ok({
+      message: "Reset code sent ✅",
+      delivery: {
+        email: !!agent.email,
+        sms: !!agent.phone,
+      },
+    });
   } catch (err) {
     console.error("❌ request_reset error:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message }),
-    };
+    return fail("Server error: " + err.message, 500);
   }
 };
