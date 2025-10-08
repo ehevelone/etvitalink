@@ -24,13 +24,14 @@ exports.handler = async (event) => {
       return fail("Method not allowed", 405);
     }
 
-    const { unlockCode, email, password, npn, phone, name } = JSON.parse(event.body || "{}");
+    const { unlockCode, email, password, npn, phone, name } =
+      JSON.parse(event.body || "{}");
 
     if (!unlockCode || !email || !password || !npn) {
       return fail("Unlock code, email, password, and NPN are required.");
     }
 
-    // 1️⃣ Look up placeholder agent row
+    // 1️⃣ Validate the unlock code
     const existing = await db.query(
       `SELECT id, active FROM agents WHERE unlock_code = $1`,
       [unlockCode]
@@ -45,10 +46,10 @@ exports.handler = async (event) => {
       return fail("Unlock code already used ❌");
     }
 
-    // 2️⃣ Hash the password securely
+    // 2️⃣ Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3️⃣ Activate the agent and update details
+    // 3️⃣ Activate agent and update info
     const result = await db.query(
       `UPDATE agents
          SET email = $1,
@@ -64,7 +65,7 @@ exports.handler = async (event) => {
 
     const row = result.rows[0];
 
-    // 4️⃣ Mark unlock code as redeemed in promo_codes
+    // 4️⃣ Mark unlock code redeemed in promo_codes
     await db.query(
       `UPDATE promo_codes
          SET redeemed = TRUE,
@@ -74,7 +75,30 @@ exports.handler = async (event) => {
       [row.id, unlockCode]
     );
 
-    // ✅ Success response with full data (used by Flutter)
+    // 5️⃣ Check if agent already has a permanent promo code
+    const promoCheck = await db.query(
+      `SELECT id, code FROM promo_codes WHERE agent_id = $1 LIMIT 1`,
+      [row.id]
+    );
+
+    let promoCode;
+    if (promoCheck.rows.length > 0) {
+      promoCode = promoCheck.rows[0].code;
+    } else {
+      // 6️⃣ Generate a new permanent promo code
+      promoCode =
+        "AG" + Math.random().toString(36).substring(2, 10).toUpperCase();
+
+      await db.query(
+        `INSERT INTO promo_codes (code, agent_id, used_count, active)
+         VALUES ($1, $2, 0, TRUE)`,
+        [promoCode, row.id]
+      );
+
+      console.log("✅ Generated new promo code for agent:", promoCode);
+    }
+
+    // ✅ Return everything Flutter needs
     return ok({
       message: "Agent registration completed ✅",
       agentId: row.id,
@@ -84,6 +108,7 @@ exports.handler = async (event) => {
       npn: row.npn,
       role: row.role || "agent",
       active: row.active,
+      promoCode, // ✅ new addition
     });
   } catch (err) {
     console.error("❌ Error in claim_agent_unlock:", err);

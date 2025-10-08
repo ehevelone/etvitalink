@@ -24,37 +24,40 @@ exports.handler = async (event) => {
       return fail("Username and promo code are required.");
     }
 
+    // 🔹 Look up promo code + linked agent
     const result = await db.query(
       `SELECT pc.id as promo_id, pc.code, pc.agent_id,
-              a.id as agent_id, a.email as agent_email,
-              a.role, a.active
+              a.id as agent_id, a.name as agent_name,
+              a.email as agent_email, a.role, a.active
        FROM promo_codes pc
        LEFT JOIN agents a ON pc.agent_id = a.id
        WHERE pc.code = $1`,
       [promoCode]
     );
 
-    if (!result.rows.length) {
-      return fail("Invalid promo code ❌");
-    }
+    if (!result.rows.length) return fail("Invalid promo code ❌");
 
     const row = result.rows[0];
+    if (!row.active) return fail("This agent is not active ❌");
 
-    if (!row.active) {
-      return fail("This agent is not active ❌");
-    }
-
-    // increment usage
+    // 🔹 Increment usage counter
     await db.query(
       "UPDATE promo_codes SET used_count = used_count + 1 WHERE id=$1",
       [row.promo_id]
     );
 
+    // 🔹 Log who used the code
+    await db.query(
+      "INSERT INTO promo_code_uses (promo_code_id, username) VALUES ($1, $2)",
+      [row.promo_id, username]
+    );
+
+    // ✅ Return agent info to display in the app
     return ok({
       message: "Promo code accepted ✅",
-      code: row.code,
       agent: {
         id: row.agent_id,
+        name: row.agent_name,
         email: row.agent_email,
         role: row.role,
         active: row.active,
