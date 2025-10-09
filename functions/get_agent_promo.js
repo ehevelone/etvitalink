@@ -24,16 +24,20 @@ exports.handler = async (event) => {
     if (!email) return fail("Email required");
 
     const result = await db.query(
-      `SELECT p.code, p.active, a.name, a.id
-       FROM promo_codes p
-       JOIN agents a ON p.agent_id = a.id
-       WHERE LOWER(a.email) = LOWER($1)
-       ORDER BY p.created_at DESC
-       LIMIT 1`,
+      `SELECT p.code,
+              a.active,
+              a.name,
+              a.id
+         FROM promo_codes p
+         JOIN agents a ON p.agent_id = a.id
+        WHERE LOWER(a.email) = LOWER($1)
+        ORDER BY p.created_at DESC
+        LIMIT 1`,
       [email]
     );
 
-    if (result.rows.length === 0) return fail("No promo code found for this agent");
+    if (result.rows.length === 0)
+      return fail("No promo code found for this agent");
 
     const row = result.rows[0];
     return ok({
