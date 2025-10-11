@@ -1,3 +1,4 @@
+// functions/get_agent_promo.js
 const db = require("../services/db");
 
 function ok(obj) {
@@ -23,25 +24,25 @@ exports.handler = async (event) => {
     const { email } = JSON.parse(event.body || "{}");
     if (!email) return fail("Email required");
 
+    // ✅ Fetch directly from agents table
     const result = await db.query(
-      `SELECT p.code,
-              a.active,
-              a.name,
-              a.id
-         FROM promo_codes p
-         JOIN agents a ON p.agent_id = a.id
-        WHERE LOWER(a.email) = LOWER($1)
-        ORDER BY p.created_at DESC
+      `SELECT id, name, promo_code, active
+         FROM agents
+        WHERE LOWER(email) = LOWER($1)
         LIMIT 1`,
       [email]
     );
 
     if (result.rows.length === 0)
-      return fail("No promo code found for this agent");
+      return fail("No agent found with that email");
 
     const row = result.rows[0];
+
+    if (!row.promo_code || row.promo_code.trim() === "")
+      return fail("Agent has no promo code assigned");
+
     return ok({
-      code: row.code,
+      code: row.promo_code,
       active: row.active,
       agent: { id: row.id, name: row.name },
     });
