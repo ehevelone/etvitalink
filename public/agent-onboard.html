@@ -1,62 +1,146 @@
-// functions/agent_onboard.js
-const db = require("../services/db");
-const crypto = require("crypto");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VitaLink Agent Onboarding</title>
+  <style>
+    :root {
+      --vitalink-blue: #0077cc;
+      --vitalink-dark: #004f88;
+      --vitalink-light: #f5f9ff;
+      --text-dark: #222;
+    }
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(180deg, var(--vitalink-light) 0%, #ffffff 100%);
+      color: var(--text-dark);
+      animation: fadeIn 0.6s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    img.logo { width: 150px; margin-bottom: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+    h1 { color: var(--vitalink-blue); font-size: 1.75rem; margin-bottom: 10px; letter-spacing: 0.5px; }
+    p { font-size: 1rem; margin: 12px 0; color: #333; }
+    .card {
+      background: #fff;
+      display: inline-block;
+      padding: 24px 32px;
+      margin-top: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 6px 25px rgba(0,0,0,0.1); }
+    #unlockCode {
+      font-size: 1.5rem; font-weight: bold; color: var(--vitalink-blue);
+      letter-spacing: 1px; margin-bottom: 8px; user-select: all;
+      cursor: pointer; transition: color 0.2s ease;
+    }
+    #unlockCode:hover { color: var(--vitalink-dark); }
+    #copyBtn {
+      background: linear-gradient(90deg, var(--vitalink-blue), var(--vitalink-dark));
+      color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; margin-top: 10px;
+      cursor: pointer; font-size: 0.95rem; font-weight: 600;
+      transition: all 0.25s ease; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0,119,204,0.3); }
+      50% { box-shadow: 0 0 0 10px rgba(0,119,204,0); }
+    }
+    #copyBtn:hover { transform: scale(1.03); background: var(--vitalink-dark); }
+    a.button {
+      display: inline-block; padding: 12px 20px; margin: 10px;
+      background: var(--vitalink-blue); color: #fff; border-radius: 6px;
+      text-decoration: none; font-weight: 600;
+      box-shadow: 0 3px 10px rgba(0,119,204,0.2);
+      transition: all 0.25s ease;
+    }
+    a.button:hover { background: var(--vitalink-dark); transform: translateY(-2px); }
+    a.button.secondary { background: #555; box-shadow: 0 3px 10px rgba(0,0,0,0.15); }
+    #fallback { display: none; margin-top: 24px; animation: fadeIn 0.6s ease-in; }
+  </style>
 
-// 🔹 Utility to generate a random unlock code (prefix AG-XXXXXXX)
-function generateUnlockCode(prefix = "AG", length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < length; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `${prefix}-${code}`;
-}
+  <script>
+    async function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
 
-// 🔹 Utility to generate a secure random token
-function generateToken() {
-  return crypto.randomBytes(16).toString("hex"); // 32-char token
-}
+    function copyCode() {
+      const codeElem = document.getElementById("unlockCode");
+      const btn = document.getElementById("copyBtn");
+      const code = codeElem.innerText.trim();
+      if (!code) return;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = "✅ Copied!";
+        setTimeout(() => (btn.textContent = "📋 Copy Code"), 2000);
+      });
+    }
 
-exports.handler = async () => {
-  try {
-    // 1️⃣ Generate both unlock code and secure token
-    const unlockCode = generateUnlockCode();
-    const onboardToken = generateToken();
+    async function openApp() {
+      const token = await getQueryParam("token");
+      if (!token) {
+        document.getElementById("unlockCode").innerText = "Invalid or missing token";
+        document.getElementById("unlockBox").style.display = "block";
+        return;
+      }
 
-    // 2️⃣ Insert a new inactive agent record with both
-    const result = await db.query(
-      `INSERT INTO agents (role, active, unlock_code, onboard_token, created_at)
-       VALUES ('agent', FALSE, $1, $2, NOW())
-       RETURNING id`,
-      [unlockCode, onboardToken]
-    );
+      // Fetch unlock code securely via Netlify backend
+      try {
+        const res = await fetch(`/.netlify/functions/resolve_token?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
 
-    const agentId = result.rows[0].id;
+        if (data && data.unlock_code) {
+          const code = data.unlock_code;
+          const deepLink = `vitalink://agent/onboard?code=${encodeURIComponent(code)}`;
 
-    // 3️⃣ Build redirect URL back to your Netlify onboarding page (token-based)
-    const redirectUrl = `https://vitalink-app.netlify.app/agent-onboard.html?token=${encodeURIComponent(onboardToken)}`;
+          // Display code for backup
+          document.getElementById("unlockCode").innerText = code;
+          document.getElementById("unlockBox").style.display = "block";
 
-    console.log(`✅ Agent ${agentId} created`);
-    console.log(`🔐 Unlock code: ${unlockCode}`);
-    console.log(`🔑 Token: ${onboardToken}`);
-    console.log(`🔗 Redirecting to: ${redirectUrl}`);
+          // Attempt to open the app
+          window.location = deepLink;
 
-    // 4️⃣ Redirect browser to your hosted HTML page (Netlify)
-    return {
-      statusCode: 302,
-      headers: {
-        Location: redirectUrl,
-      },
-    };
-  } catch (err) {
-    console.error("❌ Error in agent_onboard:", err);
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        success: false,
-        error: "Server error: " + err.message,
-      }),
-    };
-  }
-};
+          setTimeout(() => {
+            document.getElementById("fallback").style.display = "block";
+          }, 1800);
+        } else {
+          document.getElementById("unlockCode").innerText = "Invalid token";
+          document.getElementById("unlockBox").style.display = "block";
+        }
+      } catch (err) {
+        console.error("Fetch failed:", err);
+        document.getElementById("unlockCode").innerText = "Server error";
+        document.getElementById("unlockBox").style.display = "block";
+      }
+    }
+
+    window.onload = openApp;
+  </script>
+</head>
+<body>
+  <img src="/vitalink-logo-1.png" alt="VitaLink Logo" class="logo" />
+  <h1>Welcome to VitaLink Agent Setup</h1>
+  <p>If the VitaLink app is installed, it will open automatically.</p>
+
+  <!-- Unlock code display -->
+  <div id="unlockBox" class="card" style="display: none;">
+    <p>Your unlock code:</p>
+    <div id="unlockCode" onclick="copyCode()"></div>
+    <button id="copyBtn" onclick="copyCode()">📋 Copy Code</button>
+  </div>
+
+  <!-- App store fallback -->
+  <div id="fallback">
+    <p>Don’t have the app yet? Download it below:</p>
+    <a class="button" href="https://play.google.com/store/apps/details?id=com.vitalink" target="_blank">📱 Google Play</a>
+    <a class="button secondary" href="https://apps.apple.com/app/vitalink/id123456789" target="_blank">🍎 App Store</a>
+  </div>
+</body>
+</html>
