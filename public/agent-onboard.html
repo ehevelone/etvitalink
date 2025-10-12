@@ -148,9 +148,10 @@
 
     function openApp() {
       const code = getQueryParam("code");
+      // ✅ FIXED → Removed '/onboard' to match AndroidManifest filter
       const deepLink = code
-        ? `vitalink://agent/onboard?code=${encodeURIComponent(code)}`
-        : "vitalink://agent/onboard";
+        ? `vitalink://agent?code=${encodeURIComponent(code)}`
+        : "vitalink://agent";
 
       window.location = deepLink;
 
