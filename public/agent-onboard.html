@@ -5,43 +5,145 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VitaLink Agent Onboarding</title>
   <style>
+    :root {
+      --vitalink-blue: #0077cc;
+      --vitalink-dark: #004f88;
+      --vitalink-light: #f5f9ff;
+      --text-dark: #222;
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Inter', Arial, sans-serif;
       text-align: center;
-      padding: 40px;
-      background-color: #f5f9ff;
-      color: #222;
+      padding: 50px 20px;
+      background: linear-gradient(180deg, var(--vitalink-light) 0%, #ffffff 100%);
+      color: var(--text-dark);
+      animation: fadeIn 0.6s ease-in;
     }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     img.logo {
-      width: 160px;
-      margin-bottom: 20px;
+      width: 150px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
     }
+
     h1 {
-      color: #0077cc;
-      font-size: 24px;
+      color: var(--vitalink-blue);
+      font-size: 1.75rem;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
     }
+
     p {
-      font-size: 16px;
-      margin: 16px 0;
+      font-size: 1rem;
+      margin: 12px 0;
+      color: #333;
     }
+
+    .card {
+      background: #fff;
+      display: inline-block;
+      padding: 24px 32px;
+      margin-top: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+    }
+
+    #unlockCode {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--vitalink-blue);
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      user-select: all;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    #unlockCode:hover {
+      color: var(--vitalink-dark);
+    }
+
+    #copyBtn {
+      background: linear-gradient(90deg, var(--vitalink-blue), var(--vitalink-dark));
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      margin-top: 10px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: all 0.25s ease;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0,119,204,0.3); }
+      50% { box-shadow: 0 0 0 10px rgba(0,119,204,0); }
+    }
+
+    #copyBtn:hover {
+      transform: scale(1.03);
+      background: var(--vitalink-dark);
+    }
+
     a.button {
       display: inline-block;
       padding: 12px 20px;
       margin: 10px;
-      background: #0077cc;
+      background: var(--vitalink-blue);
       color: #fff;
       border-radius: 6px;
       text-decoration: none;
-      font-weight: bold;
+      font-weight: 600;
+      box-shadow: 0 3px 10px rgba(0,119,204,0.2);
+      transition: all 0.25s ease;
     }
+
+    a.button:hover {
+      background: var(--vitalink-dark);
+      transform: translateY(-2px);
+    }
+
     a.button.secondary {
       background: #555;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+    }
+
+    #fallback {
+      display: none;
+      margin-top: 24px;
+      animation: fadeIn 0.6s ease-in;
     }
   </style>
+
   <script>
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
+    }
+
+    function copyCode() {
+      const codeElem = document.getElementById("unlockCode");
+      const btn = document.getElementById("copyBtn");
+      const code = codeElem.innerText.trim();
+      if (!code) return;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = "✅ Copied!";
+        setTimeout(() => (btn.textContent = "📋 Copy Code"), 2000);
+      });
     }
 
     function openApp() {
@@ -50,17 +152,15 @@
         ? `vitalink://agent/onboard?code=${encodeURIComponent(code)}`
         : "vitalink://agent/onboard";
 
-      // Try to open VitaLink app
       window.location = deepLink;
 
-      // Fallback after 2 seconds → show download buttons
       setTimeout(function () {
         document.getElementById("fallback").style.display = "block";
         if (code) {
           document.getElementById("unlockCode").innerText = code;
           document.getElementById("unlockBox").style.display = "block";
         }
-      }, 2000);
+      }, 1800);
     }
 
     window.onload = openApp;
@@ -68,19 +168,21 @@
 </head>
 <body>
   <img src="/vitalink-logo-1.png" alt="VitaLink Logo" class="logo" />
-  <h1>Opening VitaLink…</h1>
-  <p>If you already have the app installed, it should open automatically.</p>
+  <h1>Welcome to VitaLink Agent Setup</h1>
+  <p>If the VitaLink app is installed, it will open automatically.</p>
 
-  <!-- Unlock code display if app isn't installed -->
-  <div id="unlockBox" style="display: none; margin: 20px 0;">
+  <!-- Unlock code display -->
+  <div id="unlockBox" class="card" style="display: none;">
     <p>Your unlock code:</p>
-    <div id="unlockCode" style="font-size: 22px; font-weight: bold; color:#0077cc;"></div>
+    <div id="unlockCode" onclick="copyCode()"></div>
+    <button id="copyBtn" onclick="copyCode()">📋 Copy Code</button>
   </div>
 
-  <div id="fallback" style="display: none;">
-    <p>Don’t have the app yet? Download it here:</p>
-    <a class="button" href="https://play.google.com/store/apps/details?id=com.example.vitalink" target="_blank">📱 Google Play</a>
-    <a class="button secondary" href="https://apps.apple.com/app/idXXXXXXXXX" target="_blank">🍎 App Store</a>
+  <!-- App store fallback -->
+  <div id="fallback">
+    <p>Don’t have the app yet? Download it below:</p>
+    <a class="button" href="https://play.google.com/store/apps/details?id=com.vitalink" target="_blank">📱 Google Play</a>
+    <a class="button secondary" href="https://apps.apple.com/app/vitalink/id123456789" target="_blank">🍎 App Store</a>
   </div>
 </body>
 </html>
