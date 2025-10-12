@@ -33,15 +33,15 @@ exports.handler = async () => {
 
     const agentId = result.rows[0].id;
 
-    // 3️⃣ Build redirect URL to your GitHub Pages onboarding site (now with token)
-    const redirectUrl = `https://ehevelone.github.io/vitalink-onboard/agent-onboard.html?token=${encodeURIComponent(onboardToken)}`;
+    // 3️⃣ Build redirect URL back to your Netlify onboarding page (token-based)
+    const redirectUrl = `https://vitalink-app.netlify.app/agent-onboard.html?token=${encodeURIComponent(onboardToken)}`;
 
     console.log(`✅ Agent ${agentId} created`);
     console.log(`🔐 Unlock code: ${unlockCode}`);
     console.log(`🔑 Token: ${onboardToken}`);
     console.log(`🔗 Redirecting to: ${redirectUrl}`);
 
-    // 4️⃣ Redirect browser to your hosted HTML page (GitHub Pages)
+    // 4️⃣ Redirect browser to your hosted HTML page (Netlify)
     return {
       statusCode: 302,
       headers: {
