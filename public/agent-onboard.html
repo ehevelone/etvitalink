@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VitaLink Agent Onboarding</title>
+
   <style>
     :root {
       --vitalink-blue: #0077cc;
@@ -23,15 +24,15 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    img.logo { width: 150px; margin-bottom: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
-    h1 { color: var(--vitalink-blue); font-size: 1.75rem; margin-bottom: 10px; letter-spacing: 0.5px; }
+    img.logo {
+      width: 150px; margin-bottom: 24px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+    }
+    h1 { color: var(--vitalink-blue); font-size: 1.75rem; margin-bottom: 10px; }
     p { font-size: 1rem; margin: 12px 0; color: #333; }
     .card {
-      background: #fff;
-      display: inline-block;
-      padding: 24px 32px;
-      margin-top: 20px;
-      border-radius: 16px;
+      background: #fff; display: inline-block; padding: 24px 32px;
+      margin-top: 20px; border-radius: 16px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.08);
       transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
@@ -45,8 +46,8 @@
     #copyBtn {
       background: linear-gradient(90deg, var(--vitalink-blue), var(--vitalink-dark));
       color: #fff; border: none; border-radius: 8px;
-      padding: 10px 20px; margin-top: 10px;
-      cursor: pointer; font-size: 0.95rem; font-weight: 600;
+      padding: 10px 20px; margin-top: 10px; cursor: pointer;
+      font-size: 0.95rem; font-weight: 600;
       transition: all 0.25s ease; animation: pulse 2s infinite;
     }
     @keyframes pulse {
@@ -67,7 +68,7 @@
   </style>
 
   <script>
-    async function getQueryParam(param) {
+    function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
     }
@@ -84,29 +85,30 @@
     }
 
     async function openApp() {
-      const token = await getQueryParam("token");
+      const token = getQueryParam("token");
       if (!token) {
         document.getElementById("unlockCode").innerText = "Invalid or missing token";
         document.getElementById("unlockBox").style.display = "block";
         return;
       }
 
-      // Fetch unlock code securely via Netlify backend
       try {
-        const res = await fetch(`/.netlify/functions/resolve_token?token=${encodeURIComponent(token)}`);
+        // ⚙️ Fetch from full Netlify domain (NOT relative path)
+        const res = await fetch(`https://vitalink-app.netlify.app/.netlify/functions/resolve_token?token=${encodeURIComponent(token)}`);
         const data = await res.json();
 
         if (data && data.unlock_code) {
           const code = data.unlock_code;
           const deepLink = `vitalink://agent/onboard?code=${encodeURIComponent(code)}`;
 
-          // Display code for backup
+          // Show code for visibility
           document.getElementById("unlockCode").innerText = code;
           document.getElementById("unlockBox").style.display = "block";
 
-          // Attempt to open the app
-          window.location = deepLink;
+          // Try to open VitaLink app
+          window.location.href = deepLink;
 
+          // Fallback if app not installed
           setTimeout(() => {
             document.getElementById("fallback").style.display = "block";
           }, 1800);
@@ -124,19 +126,18 @@
     window.onload = openApp;
   </script>
 </head>
+
 <body>
   <img src="/vitalink-logo-1.png" alt="VitaLink Logo" class="logo" />
   <h1>Welcome to VitaLink Agent Setup</h1>
   <p>If the VitaLink app is installed, it will open automatically.</p>
 
-  <!-- Unlock code display -->
   <div id="unlockBox" class="card" style="display: none;">
     <p>Your unlock code:</p>
     <div id="unlockCode" onclick="copyCode()"></div>
     <button id="copyBtn" onclick="copyCode()">📋 Copy Code</button>
   </div>
 
-  <!-- App store fallback -->
   <div id="fallback">
     <p>Don’t have the app yet? Download it below:</p>
     <a class="button" href="https://play.google.com/store/apps/details?id=com.vitalink" target="_blank">📱 Google Play</a>
