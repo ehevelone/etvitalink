@@ -1,5 +1,4 @@
 const nodemailer = require("nodemailer");
-const fs = require("fs");
 
 exports.handler = async (event) => {
   try {
@@ -23,43 +22,29 @@ exports.handler = async (event) => {
       attachments: [],
     };
 
-    // -------------------
-    // 🧑‍⚕️ User sends signed HIPAA & SOA with data
-    // -------------------
     if (body.agent && body.agent.email) {
       const { agent, user, meds, doctors, body: clientBody, attachments } = body;
 
       mailOptions.to = agent.email;
       mailOptions.subject = `VitaLink - Documents from ${user || "Client"}`;
 
-      // Use body text from Flutter if provided
-      if (clientBody) {
-        mailOptions.text = clientBody;
-      } else {
-        mailOptions.text = `Hello ${agent.name || "Agent"},
+      mailOptions.text =
+        clientBody ||
+        `Hello ${agent.name || "Agent"},\n\nYour client has shared documents.\n`;
 
-Your client has shared the following via VitaLink:
-
-- HIPAA & SOA Authorization: ✅ Signed
-- Medications: ${meds?.length || 0} items
-- Doctors: ${doctors?.length || 0} items
-
-Please review the attached PDF, CSV, and JSON exports.`;
-      }
-
-      // Attach PDF + CSV if paths exist
+      // ✅ Decode base64 attachments
       if (attachments && Array.isArray(attachments)) {
         attachments.forEach((att) => {
-          if (att.path && fs.existsSync(att.path)) {
+          if (att.content) {
             mailOptions.attachments.push({
               filename: att.name || "file",
-              path: att.path,
+              content: Buffer.from(att.content, "base64"),
             });
           }
         });
       }
 
-      // Attach JSON snapshots for system import
+      // Still include JSON for backend import
       mailOptions.attachments.push({
         filename: "Meds.json",
         content: JSON.stringify(meds || [], null, 2),
@@ -77,19 +62,9 @@ Please review the attached PDF, CSV, and JSON exports.`;
       };
     }
 
-    // -------------------
-    // ❌ Invalid
-    // -------------------
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Invalid payload" }),
-    };
-
+    return { statusCode: 400, body: JSON.stringify({ error: "Invalid payload" }) };
   } catch (err) {
     console.error("❌ send_form_email error", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
