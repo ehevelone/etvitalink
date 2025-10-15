@@ -34,8 +34,15 @@ exports.handler = async (event) => {
 
     const agent = result.rows[0];
 
-    // ✅ Compare entered password with bcrypt hash
+    // 🔎 Debugging output
+    console.log("DEBUG login attempt for:", email);
+    console.log("DEBUG entered password:", password);
+    console.log("DEBUG hash in DB:", agent.password_hash);
+    
+    // Compare entered password with bcrypt hash
     const isMatch = await bcrypt.compare(password, agent.password_hash);
+    console.log("DEBUG bcrypt compare result:", isMatch);
+
     if (!isMatch) {
       return fail("Invalid password ❌");
     }
@@ -44,15 +51,18 @@ exports.handler = async (event) => {
       return fail("This account has been disabled.");
     }
 
-    // ✅ Send back full contact info so app can update profile
+    // ✅ Wrap inside agent object (Flutter expects this format)
     return ok({
       message: "Agent login successful ✅",
-      agentId: agent.id,
-      email: agent.email,
-      name: agent.name || null,
-      phone: agent.phone || null,
-      role: agent.role,
-      active: agent.active,
+      agent: {
+        id: agent.id,
+        email: agent.email,
+        name: agent.name || null,
+        phone: agent.phone || null,
+        npn: agent.npn || null,
+        role: agent.role,
+        active: agent.active,
+      }
     });
   } catch (err) {
     console.error("❌ check_agent error:", err);
