@@ -23,58 +23,50 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
     const { emailOrPhone, code, newPassword } = JSON.parse(event.body || "{}");
-    if (!emailOrPhone || !code || !newPassword)
+    if (!emailOrPhone || !code || !newPassword) {
       return fail("Missing required fields ❌");
-
-    // 1️⃣ Lookup reset code (match by code)
-    const codeRes = await db.query(
-      `SELECT user_id, expires_at
-       FROM reset_codes
-       WHERE code = $1
-       ORDER BY expires_at DESC
-       LIMIT 1`,
-      [code]
-    );
-
-    if (codeRes.rows.length === 0) {
-      return fail("Invalid or expired reset code ❌");
     }
 
-    const reset = codeRes.rows[0];
-    if (new Date(reset.expires_at) < new Date()) {
+    // Try agents first
+    let user, table;
+    const agentRes = await db.query(
+      `SELECT id, email, reset_code, reset_expires FROM agents WHERE email = $1`,
+      [emailOrPhone]
+    );
+    if (agentRes.rows.length > 0) {
+      user = agentRes.rows[0];
+      table = "agents";
+    } else {
+      const userRes = await db.query(
+        `SELECT id, email, reset_code, reset_expires FROM users WHERE email = $1`,
+        [emailOrPhone]
+      );
+      if (userRes.rows.length > 0) {
+        user = userRes.rows[0];
+        table = "users";
+      }
+    }
+
+    if (!user) return fail("No account found for this email ❌", 404);
+
+    // Verify code + expiration
+    if (user.reset_code !== code) {
+      return fail("Invalid reset code ❌");
+    }
+    if (!user.reset_expires || new Date(user.reset_expires) < new Date()) {
       return fail("Reset code expired ❌");
     }
 
-    // 2️⃣ Try to find which table this user belongs to
-    let targetTable = null;
-    const agentRes = await db.query(
-      `SELECT id FROM agents WHERE id = $1 AND email = $2`,
-      [reset.user_id, emailOrPhone]
-    );
-
-    if (agentRes.rows.length > 0) {
-      targetTable = "agents";
-    } else {
-      const userRes = await db.query(
-        `SELECT id FROM users WHERE id = $1 AND email = $2`,
-        [reset.user_id, emailOrPhone]
-      );
-      if (userRes.rows.length > 0) targetTable = "users";
-    }
-
-    if (!targetTable) return fail("Account not found ❌");
-
-    // 3️⃣ Hash new password
+    // Hash the new password
     const hashed = await bcrypt.hash(newPassword, 10);
 
-    // 4️⃣ Update password in the correct table
+    // Update password + clear reset code
     await db.query(
-      `UPDATE ${targetTable} SET password_hash = $1 WHERE id = $2`,
-      [hashed, reset.user_id]
+      `UPDATE ${table} 
+         SET password_hash = $1, reset_code = NULL, reset_expires = NULL 
+       WHERE id = $2`,
+      [hashed, user.id]
     );
-
-    // 5️⃣ Invalidate the reset code
-    await db.query(`DELETE FROM reset_codes WHERE code = $1`, [code]);
 
     return ok({ message: "Password reset successful ✅" });
   } catch (err) {
