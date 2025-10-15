@@ -21,27 +21,24 @@ function fail(msg, code = 400) {
 exports.handler = async (event) => {
   try {
     const { email, password } = JSON.parse(event.body || "{}");
+    console.log("🔍 Incoming login attempt:", { email, password });
 
     if (!email || !password) {
       return fail("Missing email or password.");
     }
 
     const result = await db.query("SELECT * FROM agents WHERE email=$1", [email]);
+    console.log("🔍 DB Result:", result.rows);
 
     if (!result.rows.length) {
       return fail("No account found with this email.");
     }
 
     const agent = result.rows[0];
+    console.log("🔍 Stored hash:", agent.password_hash);
 
-    // 🔎 Debugging output
-    console.log("DEBUG login attempt for:", email);
-    console.log("DEBUG entered password:", password);
-    console.log("DEBUG hash in DB:", agent.password_hash);
-    
-    // Compare entered password with bcrypt hash
     const isMatch = await bcrypt.compare(password, agent.password_hash);
-    console.log("DEBUG bcrypt compare result:", isMatch);
+    console.log("🔑 Compare result:", isMatch);
 
     if (!isMatch) {
       return fail("Invalid password ❌");
@@ -51,7 +48,6 @@ exports.handler = async (event) => {
       return fail("This account has been disabled.");
     }
 
-    // ✅ Wrap inside agent object (Flutter expects this format)
     return ok({
       message: "Agent login successful ✅",
       agent: {
@@ -62,7 +58,7 @@ exports.handler = async (event) => {
         npn: agent.npn || null,
         role: agent.role,
         active: agent.active,
-      }
+      },
     });
   } catch (err) {
     console.error("❌ check_agent error:", err);
