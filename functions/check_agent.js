@@ -1,5 +1,5 @@
 // functions/check_agent.js
-console.log("SUPABASE_URL from env:", process.env.SUPABASE_URL);
+// 🚀 Updated 2025-10-16 with case-insensitive email match + safer handling
 
 const db = require("../services/db");
 const bcrypt = require("bcryptjs");
@@ -23,24 +23,33 @@ function fail(msg, code = 400) {
 exports.handler = async (event) => {
   try {
     const { email, password } = JSON.parse(event.body || "{}");
-    console.log("🔍 Incoming login attempt:", { email, password });
+    console.log("🔍 Incoming agent login attempt:", { email });
 
     if (!email || !password) {
       return fail("Missing email or password.");
     }
 
-    // query database
-    const result = await db.query("SELECT * FROM agents WHERE email=$1", [email]);
-    console.log("🔍 DB Result:", result.rows);
+    // ✅ Case-insensitive email lookup
+    const result = await db.query(
+      "SELECT * FROM agents WHERE LOWER(email) = LOWER($1)",
+      [email.trim()]
+    );
+    console.log("🔍 DB result count:", result.rows.length);
 
     if (!result.rows.length) {
       return fail("No account found with this email.");
     }
 
     const agent = result.rows[0];
-    console.log("🔍 Stored hash:", agent.password_hash);
+    console.log("🔍 Agent ID:", agent.id, "Active:", agent.active);
 
-    // compare password
+    // ✅ Handle missing password_hash gracefully
+    if (!agent.password_hash) {
+      console.error("❌ No password hash found for agent:", agent.id);
+      return fail("Agent account not set up correctly. Contact support.");
+    }
+
+    // ✅ Compare password
     const isMatch = await bcrypt.compare(password, agent.password_hash);
     console.log("🔑 Compare result:", isMatch);
 
@@ -52,6 +61,7 @@ exports.handler = async (event) => {
       return fail("This account has been disabled.");
     }
 
+    // ✅ Return clean agent object (no password hash ever sent back)
     return ok({
       message: "Agent login successful ✅",
       agent: {
@@ -60,7 +70,7 @@ exports.handler = async (event) => {
         name: agent.name || null,
         phone: agent.phone || null,
         npn: agent.npn || null,
-        role: agent.role,
+        role: agent.role || "agent",
         active: agent.active,
       },
     });
