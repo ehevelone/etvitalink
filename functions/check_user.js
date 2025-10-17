@@ -1,4 +1,6 @@
 // functions/check_user.js
+// 🚀 Force redeploy trigger 2025-10-16
+
 const db = require("../services/db");
 const crypto = require("crypto");
 
