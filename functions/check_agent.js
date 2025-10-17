@@ -1,4 +1,6 @@
 // functions/check_agent.js
+console.log("SUPABASE_URL from env:", process.env.SUPABASE_URL);
+
 const db = require("../services/db");
 const bcrypt = require("bcryptjs");
 
@@ -27,6 +29,7 @@ exports.handler = async (event) => {
       return fail("Missing email or password.");
     }
 
+    // query database
     const result = await db.query("SELECT * FROM agents WHERE email=$1", [email]);
     console.log("🔍 DB Result:", result.rows);
 
@@ -37,6 +40,7 @@ exports.handler = async (event) => {
     const agent = result.rows[0];
     console.log("🔍 Stored hash:", agent.password_hash);
 
+    // compare password
     const isMatch = await bcrypt.compare(password, agent.password_hash);
     console.log("🔑 Compare result:", isMatch);
 
