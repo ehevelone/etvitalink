@@ -28,13 +28,12 @@ exports.handler = async (event) => {
     // 🔢 Generate a 6-digit reset code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 🔎 Find the account in 'agents' or 'users' table
+    // 🔎 Try to find account in agents first
     let user, table;
     const agentRes = await db.query(
       `SELECT id, email FROM agents WHERE email = $1`,
       [emailOrPhone]
     );
-
     if (agentRes.rows.length > 0) {
       user = agentRes.rows[0];
       table = "agents";
@@ -51,32 +50,33 @@ exports.handler = async (event) => {
 
     if (!user) return fail("No account found for this email ❌", 404);
 
-    // 🕒 Store reset code + expiration directly in the user table
+    // 🕒 Update the reset_code + reset_expires
     await db.query(
       `UPDATE ${table}
-       SET reset_code = $1, reset_expires = NOW() + INTERVAL '20 MINUTES'
-       WHERE id = $2`,
-      [resetCode, user.id]
+         SET reset_code = $2,
+             reset_expires = NOW() + INTERVAL '20 minutes'
+       WHERE id = $1`,
+      [user.id, resetCode]
     );
 
-    // 📧 Configure Gmail transporter
+    // 📧 Send the reset code email
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,            // e.g. smtp.gmail.com
-      port: process.env.SMTP_PORT || 587,     // 587 (TLS) or 465 (SSL)
-      secure: process.env.SMTP_PORT == "465", // true only if using port 465
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: false, // if using Gmail, leave false for STARTTLS
       auth: {
-        user: process.env.SMTP_USER, // full Gmail address
-        pass: process.env.SMTP_PASS, // app password
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
     });
 
     const mailBody = `
-      Hi there,
+      Hi,
 
       Your VitaLink password reset code is: ${resetCode}
 
       This code will expire in 20 minutes.
-      If you didn’t request this, please ignore this email.
+      If you didn’t request this, you can ignore this email.
 
       – VitaLink Support
     `;
