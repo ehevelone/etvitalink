@@ -13,8 +13,8 @@
 # ✅ Serverless Functions Setup
 # ============================
 [functions]
-  # Folder containing all your Netlify Functions
-  directory = "functions"
+  # 🚨 Point directly to the backend functions folder
+  directory = "vitalink-backend/functions"
 
   # Use esbuild for fast bundling
   node_bundler = "esbuild"
@@ -26,7 +26,7 @@
     "qrcode",      # QR code generation
     "bcryptjs",    # Password hashing
     "sharp",       # Image processing
-    "twilio"       # ✅ SMS service for password resets
+    "twilio"       # SMS service for password resets
   ]
 
 # ============================
