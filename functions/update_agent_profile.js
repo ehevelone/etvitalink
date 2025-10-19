@@ -31,7 +31,7 @@ exports.handler = async (event) => {
       npn,
       agencyName,
       agencyAddress,
-      unlockCode,
+      password, // ✅ allow password change if provided
     } = body;
 
     if (!email) {
@@ -63,9 +63,9 @@ exports.handler = async (event) => {
       updates.push(`agency_address = $${idx++}`);
       values.push(agencyAddress);
     }
-    if (unlockCode) {
-      updates.push(`unlock_code = $${idx++}`);
-      values.push(unlockCode);
+    if (password) {
+      updates.push(`password = crypt($${idx++}, gen_salt('bf'))`);
+      values.push(password);
     }
 
     if (updates.length === 0) {
@@ -78,7 +78,7 @@ exports.handler = async (event) => {
       UPDATE agents
       SET ${updates.join(", ")}
       WHERE email = $${idx}
-      RETURNING id, email, name, phone, npn, agency_name, agency_address, unlock_code;
+      RETURNING id, email, name, phone, npn, agency_name, agency_address;
     `;
 
     const result = await db.query(query, values);
