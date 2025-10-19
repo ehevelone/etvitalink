@@ -3,39 +3,50 @@
 # ============================
 
 [build]
+  # The folder Netlify will deploy publicly (you can leave empty if you only serve APIs)
   publish = "public"
-  command = "echo 'No frontend build step needed'"
 
 # ============================
 # ✅ Serverless Functions Setup
 # ============================
 [functions]
-  directory = "vitalink-backend/functions"
+  # Folder containing all your Netlify Functions
+  directory = "functions"
+
+  # Use esbuild for bundling
   node_bundler = "esbuild"
+
+  # Include Node dependencies for serverless
   external_node_modules = [
-    "pg",
-    "nodemailer",
-    "qrcode",
-    "bcryptjs",
-    "sharp",
-    "twilio"
+    "pg",          # PostgreSQL
+    "nodemailer",  # Email sending
+    "qrcode",      # QR code generation
+    "bcryptjs",    # Password hashing
+    "sharp",       # Image processing
+    "twilio"       # SMS service for password resets
   ]
 
 # ============================
-# ✅ Local Development Settings
+# ✅ Local Dev Settings
 # ============================
 [dev]
+  # Force Netlify Dev to run only the functions server
   framework = "#custom"
-  command = "echo 'No frontend dev server'"
+  command = ""
   targetPort = 8888
-  functions = "vitalink-backend/functions"
-  publish = "public"
+  port = 8888
+  functions = "functions"
 
 # ============================
 # ✅ Environment Configuration
 # ============================
 [build.environment]
   NODE_VERSION = "20"
+
+  # Gmail SMTP settings
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
+
+  # 🚨 IMPORTANT: Do NOT put SMTP_PASS or other secrets here
+  # Store them securely in Netlify → Site Settings → Environment Variables
