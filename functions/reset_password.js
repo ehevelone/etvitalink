@@ -1,6 +1,6 @@
-// functions/reset_password.js
+// functions/request_reset.js
 const db = require("../services/db");
-const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
 
 function ok(obj) {
   return {
@@ -22,25 +22,17 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
-    const { emailOrPhone, code, newPassword } = JSON.parse(event.body || "{}");
-    if (!emailOrPhone || !code || !newPassword) {
-      return fail("Missing required fields ❌");
-    }
+    const { email } = JSON.parse(event.body || "{}");
+    if (!email) return fail("Missing email ❌");
 
-    // Try agents first
+    // Check both agents and users tables
     let user, table;
-    const agentRes = await db.query(
-      `SELECT id, email, reset_code, reset_expires FROM agents WHERE email = $1`,
-      [emailOrPhone]
-    );
+    const agentRes = await db.query(`SELECT id, email FROM agents WHERE email=$1`, [email]);
     if (agentRes.rows.length > 0) {
       user = agentRes.rows[0];
       table = "agents";
     } else {
-      const userRes = await db.query(
-        `SELECT id, email, reset_code, reset_expires FROM users WHERE email = $1`,
-        [emailOrPhone]
-      );
+      const userRes = await db.query(`SELECT id, email FROM users WHERE email=$1`, [email]);
       if (userRes.rows.length > 0) {
         user = userRes.rows[0];
         table = "users";
@@ -49,28 +41,38 @@ exports.handler = async (event) => {
 
     if (!user) return fail("No account found for this email ❌", 404);
 
-    // Verify code + expiration
-    if (user.reset_code !== code) {
-      return fail("Invalid reset code ❌");
-    }
-    if (!user.reset_expires || new Date(user.reset_expires) < new Date()) {
-      return fail("Reset code expired ❌");
-    }
+    // Generate code + expiry
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
+    const expires = new Date(Date.now() + 1000 * 60 * 15); // 15 mins
 
-    // Hash the new password
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    // Update password + clear reset code
+    // Save in DB
     await db.query(
-      `UPDATE ${table} 
-         SET password_hash = $1, reset_code = NULL, reset_expires = NULL 
-       WHERE id = $2`,
-      [hashed, user.id]
+      `UPDATE ${table} SET reset_code=$1, reset_expires=$2 WHERE id=$3`,
+      [resetCode, expires, user.id]
     );
 
-    return ok({ message: "Password reset successful ✅" });
+    // Setup email transport
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+      secure: false, // use true if 465
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    // Send email
+    await transporter.sendMail({
+      from: `"VitaLink Support" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Your VitaLink Reset Code",
+      text: `Your password reset code is ${resetCode}. It expires in 15 minutes.`,
+    });
+
+    return ok({ message: "Reset code sent via email ✅" });
   } catch (err) {
-    console.error("❌ Error in reset_password:", err);
-    return fail("Server error during password reset ❌", 500);
+    console.error("❌ Error in request_reset:", err);
+    return fail("Server error during reset request ❌", 500);
   }
 };
