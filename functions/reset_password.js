@@ -1,67 +1,81 @@
-// netlify/functions/request_reset.js
-const db = require("../services/db");        // uses your existing PG helper
-const nodemailer = require("nodemailer");    // make sure nodemailer is installed
+// functions/reset_password.js
+const db = require("../services/db");
+const bcrypt = require("bcryptjs");
 
 function ok(obj) {
-  return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ success: true, ...obj }) };
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: true, ...obj }),
+  };
 }
+
 function fail(msg, code = 400) {
-  return { statusCode: code, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ success: false, error: msg }) };
+  return {
+    statusCode: code,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ success: false, error: msg }),
+  };
 }
 
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
-    const { emailOrPhone } = JSON.parse(event.body || "{}");
-    if (!emailOrPhone) return fail("Email is required ❌");
-
-    // 1) Look up the account (agents first, then users)
-    let account = null, table = null;
-    const a = await db.query(`SELECT id, email FROM agents WHERE email = $1`, [emailOrPhone]);
-    if (a.rows.length) { account = a.rows[0]; table = "agents"; }
-    else {
-      const u = await db.query(`SELECT id, email FROM users WHERE email = $1`, [emailOrPhone]);
-      if (u.rows.length) { account = u.rows[0]; table = "users"; }
+    const { emailOrPhone, code, newPassword } = JSON.parse(event.body || "{}");
+    if (!emailOrPhone || !code || !newPassword) {
+      return fail("Missing required fields ❌");
     }
-    if (!account) return fail("No account found for this email ❌", 404);
 
-    // 2) Make a 6-digit code that expires in 15 minutes
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expire = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-    await db.query(
-      `UPDATE ${table} SET reset_code = $1, reset_expires = $2 WHERE id = $3`,
-      [code, expire, account.id]
+    // 🔎 Look in agents first
+    let user, table;
+    const agentRes = await db.query(
+      `SELECT id, email, reset_code, reset_expires FROM agents WHERE email = $1`,
+      [emailOrPhone]
     );
 
-    // 3) Send the email
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-    const from = process.env.FROM_EMAIL || "no-reply@vitalink.app";
-
-    if (!host || !user || !pass) {
-      console.error("Missing SMTP env vars");
-      return fail("Email service not configured ❌", 500);
+    if (agentRes.rows.length > 0) {
+      user = agentRes.rows[0];
+      table = "agents";
+    } else {
+      const userRes = await db.query(
+        `SELECT id, email, reset_code, reset_expires FROM users WHERE email = $1`,
+        [emailOrPhone]
+      );
+      if (userRes.rows.length > 0) {
+        user = userRes.rows[0];
+        table = "users";
+      }
     }
 
-    const transporter = nodemailer.createTransport({
-      host, port, secure: port === 465, auth: { user, pass },
-    });
+    if (!user) return fail("No account found for this email ❌", 404);
 
-    await transporter.sendMail({
-      from,
-      to: account.email,
-      subject: "Your VitaLink reset code",
-      text: `Your password reset code is ${code}. It expires in 15 minutes.`,
-      html: `<p>Your password reset code is <b>${code</b>}. It expires in 15 minutes.</p>`,
-    });
+    // ✅ Verify reset code
+    if (user.reset_code !== code) {
+      return fail("Invalid reset code ❌");
+    }
 
-    return ok({ message: "Reset code sent via email ✅" });
+    // ✅ Verify not expired
+    if (!user.reset_expires || new Date(user.reset_expires) < new Date()) {
+      return fail("Reset code expired ❌");
+    }
+
+    // 🔐 Hash the new password
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    // ✅ Update password + clear reset_code
+    await db.query(
+      `UPDATE ${table}
+       SET password_hash = $1,
+           reset_code = NULL,
+           reset_expires = NULL
+       WHERE id = $2`,
+      [hashed, user.id]
+    );
+
+    return ok({ message: "Password reset successful ✅" });
   } catch (err) {
-    console.error("❌ request_reset error:", err);
-    return fail("Server error sending reset code ❌", 500);
+    console.error("❌ Error in reset_password:", err);
+    return fail("Server error during password reset ❌", 500);
   }
 };

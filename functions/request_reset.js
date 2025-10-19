@@ -29,41 +29,44 @@ exports.handler = async (event) => {
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // 🔎 Find the account in 'agents' or 'users' table
-    let user;
+    let user, table;
     const agentRes = await db.query(
-      `SELECT id, email, role FROM agents WHERE email = $1`,
+      `SELECT id, email FROM agents WHERE email = $1`,
       [emailOrPhone]
     );
 
     if (agentRes.rows.length > 0) {
       user = agentRes.rows[0];
+      table = "agents";
     } else {
       const userRes = await db.query(
-        `SELECT id, email, role FROM users WHERE email = $1`,
+        `SELECT id, email FROM users WHERE email = $1`,
         [emailOrPhone]
       );
       if (userRes.rows.length > 0) {
         user = userRes.rows[0];
+        table = "users";
       }
     }
 
     if (!user) return fail("No account found for this email ❌", 404);
 
-    // 🕒 Store code with 20-minute expiration
+    // 🕒 Store reset code + expiration directly in the user table
     await db.query(
-      `INSERT INTO reset_codes (user_id, code, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '20 MINUTES')`,
-      [user.id, resetCode]
+      `UPDATE ${table}
+       SET reset_code = $1, reset_expires = NOW() + INTERVAL '20 MINUTES'
+       WHERE id = $2`,
+      [resetCode, user.id]
     );
 
-    // 📧 Send email with reset code
+    // 📧 Configure Gmail transporter
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: false,
+      host: process.env.SMTP_HOST,            // e.g. smtp.gmail.com
+      port: process.env.SMTP_PORT || 587,     // 587 (TLS) or 465 (SSL)
+      secure: process.env.SMTP_PORT == "465", // true only if using port 465
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: process.env.SMTP_USER, // full Gmail address
+        pass: process.env.SMTP_PASS, // app password
       },
     });
 
@@ -94,6 +97,6 @@ exports.handler = async (event) => {
     });
   } catch (err) {
     console.error("❌ Error in request_reset:", err);
-    return fail("Server error while sending reset code ❌");
+    return fail("Server error while sending reset code ❌", 500);
   }
 };
