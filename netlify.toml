@@ -10,7 +10,6 @@
 # ✅ Serverless Functions Setup
 # ============================
 [functions]
-  # Point to backend folder (not the deleted one)
   directory = "vitalink-backend/functions"
   node_bundler = "esbuild"
   external_node_modules = [
@@ -23,12 +22,20 @@
   ]
 
 # ============================
+# ✅ Local Development Settings
+# ============================
+[dev]
+  framework = "#custom"
+  command = "echo 'No frontend dev server'"
+  targetPort = 8888
+  functions = "vitalink-backend/functions"
+  publish = "public"
+
+# ============================
 # ✅ Environment Configuration
 # ============================
 [build.environment]
   NODE_VERSION = "20"
-
-  # Gmail SMTP
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
