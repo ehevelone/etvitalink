@@ -2,6 +2,11 @@
 const db = require("../services/db");
 const nodemailer = require("nodemailer");
 
+// ✅ Allow .env in local dev
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
+
 function ok(obj) {
   return {
     statusCode: 200,
@@ -21,6 +26,14 @@ function fail(msg, code = 400) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
+
+    // 🔎 DEBUG: log which env vars are coming through
+    console.log("SMTP_HOST:", process.env.SMTP_HOST);
+    console.log("SMTP_USER:", process.env.SMTP_USER);
+    console.log(
+      "SMTP_PASS length:",
+      process.env.SMTP_PASS ? process.env.SMTP_PASS.length : "MISSING"
+    );
 
     const { emailOrPhone } = JSON.parse(event.body || "{}");
     if (!emailOrPhone) return fail("Email is required ❌");
@@ -61,9 +74,9 @@ exports.handler = async (event) => {
 
     // 📧 Send the reset code email
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: false, // if using Gmail, leave false for STARTTLS
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: process.env.SMTP_PORT || 587,
+      secure: false, // Gmail uses STARTTLS
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
