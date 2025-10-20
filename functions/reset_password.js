@@ -27,7 +27,7 @@ exports.handler = async (event) => {
       return fail("Missing required fields ❌");
     }
 
-    // 🔎 Look in agents first
+    // 🔎 Look in agents first, then users
     let user, table;
     const agentRes = await db.query(
       `SELECT id, email, reset_code, reset_expires FROM agents WHERE email = $1`,
@@ -73,7 +73,13 @@ exports.handler = async (event) => {
       [hashed, user.id]
     );
 
-    return ok({ message: "Password reset successful ✅" });
+    console.log(`✅ Password reset successful for ${user.email} (${table})`);
+
+    return ok({
+      message: `Password reset successful ✅`,
+      role: table,
+      email: user.email,
+    });
   } catch (err) {
     console.error("❌ Error in reset_password:", err);
     return fail("Server error during password reset ❌", 500);

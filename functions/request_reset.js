@@ -80,30 +80,48 @@ exports.handler = async (event) => {
       },
     });
 
-    const mailBody = `
-      Hi,
+    // ✅ Different subject/body depending on role
+    let subject, mailBody;
+    if (table === "agents") {
+      subject = "VitaLink Agent Password Reset Code";
+      mailBody = `
+        Hi Agent,
 
-      Your VitaLink password reset code is: ${resetCode}
+        Your VitaLink Agent password reset code is: ${resetCode}
 
-      This code will expire in 20 minutes.
-      If you didn’t request this, you can ignore this email.
+        This code will expire in 20 minutes.
+        If you didn’t request this, you can ignore this email.
 
-      – VitaLink Support
-    `;
+        – VitaLink Support
+      `;
+    } else {
+      subject = "VitaLink User Password Reset Code";
+      mailBody = `
+        Hi,
+
+        Your VitaLink User password reset code is: ${resetCode}
+
+        This code will expire in 20 minutes.
+        If you didn’t request this, you can ignore this email.
+
+        – VitaLink Support
+      `;
+    }
 
     await transporter.sendMail({
       from: `"VitaLink Support" <${process.env.SMTP_USER}>`,
       to: user.email,
-      subject: "Your VitaLink Password Reset Code",
+      subject,
       text: mailBody,
     });
 
-    console.log(`✅ Sent reset code ${resetCode} to ${user.email}`);
+    console.log(`✅ Sent reset code ${resetCode} to ${user.email} (${table})`);
 
     return ok({
       message: "Reset code sent successfully ✅",
       expiresIn: "20 minutes",
       sentTo: user.email,
+      role: table,
     });
   } catch (err) {
     console.error("❌ Error in request_reset:", err);
