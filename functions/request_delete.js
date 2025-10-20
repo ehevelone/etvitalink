@@ -1,10 +1,5 @@
 // functions/request_delete.js
-const { createClient } = require("@supabase/supabase-js");
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY // ⚠️ Service key
-);
+const db = require("../services/db");
 
 function ok(msg) {
   return {
@@ -31,34 +26,24 @@ exports.handler = async (event) => {
       return fail("Username or email is required ❌");
     }
 
-    // 🔎 Try to delete from users
+    // 🔎 Try to delete from users by username
     if (username) {
-      const { data, error } = await supabase
-        .from("users")
-        .delete()
-        .eq("username", username);
-
-      if (error) {
-        console.error("❌ Error deleting user:", error);
-        return fail("Failed to delete user ❌");
-      }
-      if (data && data.length > 0) {
+      const res = await db.query(
+        `DELETE FROM users WHERE username = $1 RETURNING id`,
+        [username]
+      );
+      if (res.rowCount > 0) {
         return ok("User account deleted successfully ✅");
       }
     }
 
-    // 🔎 Try to delete from agents
+    // 🔎 Try to delete from agents by email
     if (email) {
-      const { data, error } = await supabase
-        .from("agents")
-        .delete()
-        .eq("email", email);
-
-      if (error) {
-        console.error("❌ Error deleting agent:", error);
-        return fail("Failed to delete agent ❌");
-      }
-      if (data && data.length > 0) {
+      const res = await db.query(
+        `DELETE FROM agents WHERE email = $1 RETURNING id`,
+        [email]
+      );
+      if (res.rowCount > 0) {
         return ok("Agent account deleted successfully ✅");
       }
     }
