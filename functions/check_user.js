@@ -1,12 +1,14 @@
-// functions/check_user.js
-// 🚀 Force redeploy trigger 2025-10-16
+// netlify/functions/check_user.js
+// 🚀 Fixed: use bcrypt (matches agent side + register_user.js)
 
-const db = require("../services/db");
-const crypto = require("crypto");
+const { createClient } = require('@supabase/supabase-js');
+const bcrypt = require('bcryptjs');
 
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
+// ✅ Supabase service client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 function reply(success, obj = {}) {
   return {
@@ -18,22 +20,30 @@ function reply(success, obj = {}) {
 
 exports.handler = async (event) => {
   try {
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
+    }
+
     const { username, password } = JSON.parse(event.body || "{}");
 
     if (!username || !password) {
       return reply(false, { error: "Username and password required ❌" });
     }
 
-    const result = await db.query("SELECT * FROM users WHERE username=$1", [username]);
+    // ✅ Fetch user from Supabase
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, username, password_hash, phone, promo_code")
+      .eq("username", username)
+      .single();
 
-    if (!result.rows.length) {
+    if (error || !user) {
       return reply(false, { error: "No user exists, please register first." });
     }
 
-    const user = result.rows[0];
-    const hashed = hashPassword(password);
-
-    if (user.password_hash !== hashed) {
+    // ✅ Compare bcrypt hash
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
       return reply(false, { error: "Invalid password ❌" });
     }
 
@@ -41,6 +51,8 @@ exports.handler = async (event) => {
       message: "User login successful ✅",
       userId: user.id,
       username: user.username,
+      phone: user.phone,
+      promoCode: user.promo_code,
       role: "user",
     });
   } catch (err) {
