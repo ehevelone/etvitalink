@@ -13,16 +13,23 @@ function reply(success, obj = {}) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ error: "Method Not Allowed" }),
+      };
     }
 
-    const { username, password, promoCode, phone } = JSON.parse(event.body || "{}");
+    const body = JSON.parse(event.body || "{}");
+
+    // ✅ Normalize: allow frontend to send either "name" or "username"
+    const username = body.username || body.name;
+    const { password, promoCode, phone } = body;
 
     if (!username || !password) {
       return reply(false, { error: "Missing required fields" });
     }
 
-    // ✅ Hash password with bcrypt (same as agent)
+    // ✅ Hash password with bcrypt
     const password_hash = await bcrypt.hash(password, 10);
 
     // ✅ Insert into Postgres via db.js
@@ -37,7 +44,11 @@ exports.handler = async (event) => {
 
     return reply(true, {
       message: "User registered successfully",
-      user: { id: user.id, username: user.username, promo_code: user.promo_code },
+      user: {
+        id: user.id,
+        username: user.username,
+        promo_code: user.promo_code,
+      },
     });
   } catch (err) {
     console.error("❌ register_user error:", err);
