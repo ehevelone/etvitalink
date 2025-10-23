@@ -1,14 +1,6 @@
-// netlify/functions/check_user.js
-// 🚀 Fixed: use bcrypt (matches agent side + register_user.js)
-
-const { createClient } = require('@supabase/supabase-js');
-const bcrypt = require('bcryptjs');
-
-// ✅ Supabase service client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// functions/check_user.js
+const db = require("../services/db");
+const bcrypt = require("bcryptjs");
 
 function reply(success, obj = {}) {
   return {
@@ -30,18 +22,16 @@ exports.handler = async (event) => {
       return reply(false, { error: "Username and password required ❌" });
     }
 
-    // ✅ Fetch user from Supabase
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("id, username, password_hash, phone, promo_code")
-      .eq("username", username)
-      .single();
+    // ✅ Look up user
+    const result = await db.query("SELECT * FROM users WHERE username=$1", [username]);
 
-    if (error || !user) {
+    if (!result.rows.length) {
       return reply(false, { error: "No user exists, please register first." });
     }
 
-    // ✅ Compare bcrypt hash
+    const user = result.rows[0];
+
+    // ✅ Compare with bcrypt
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return reply(false, { error: "Invalid password ❌" });
@@ -51,8 +41,6 @@ exports.handler = async (event) => {
       message: "User login successful ✅",
       userId: user.id,
       username: user.username,
-      phone: user.phone,
-      promoCode: user.promo_code,
       role: "user",
     });
   } catch (err) {
