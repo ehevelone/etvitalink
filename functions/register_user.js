@@ -22,12 +22,9 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || "{}");
     const { firstName, lastName, email, phone, password, promoCode } = body;
 
-    // ✅ Validation
     if (!firstName || !lastName || !email || !password || !promoCode) {
       return reply(false, { error: "Missing required fields" });
     }
-
-    const cleanPhone = phone ? phone.replace(/\D/g, "") : null;
 
     // ✅ Hash password
     const password_hash = await bcrypt.hash(password, 10);
@@ -35,58 +32,54 @@ exports.handler = async (event) => {
     let agentId = null;
     let purchaseCode = null;
 
-    if (promoCode.startsWith("AG-")) {
-      // 🔹 Agent code
-      const agentResult = await db.query(
-        `SELECT id, subscription_valid FROM agents WHERE promo_code = $1 LIMIT 1`,
-        [promoCode]
-      );
+    // 🔎 Check if promoCode belongs to an Agent (unlock_code)
+    const agentResult = await db.query(
+      `SELECT id, active FROM agents WHERE unlock_code = $1 LIMIT 1`,
+      [promoCode]
+    );
 
-      if (!agentResult.rows.length) {
-        return reply(false, { error: "Invalid agent promo code" });
-      }
-      if (!agentResult.rows[0].subscription_valid) {
+    if (agentResult.rows.length) {
+      const agent = agentResult.rows[0];
+      if (!agent.active) {
         return reply(false, { error: "Agent subscription inactive ❌" });
       }
-
-      agentId = agentResult.rows[0].id;
-    } else if (promoCode.startsWith("PU-")) {
-      // 🔹 Purchase code
+      agentId = agent.id;
+    } else {
+      // 🔎 Otherwise, check if it is a purchase code
       const purchaseResult = await db.query(
-        `SELECT id, redeemed FROM purchase_codes WHERE code = $1 LIMIT 1`,
+        `SELECT code, redeemed FROM purchase_codes WHERE code = $1 LIMIT 1`,
         [promoCode]
       );
 
-      if (!purchaseResult.rows.length) {
-        return reply(false, { error: "Invalid purchase code" });
-      }
-      if (purchaseResult.rows[0].redeemed) {
-        return reply(false, { error: "This purchase code has already been used" });
-      }
+      if (purchaseResult.rows.length) {
+        const pc = purchaseResult.rows[0];
+        if (pc.redeemed) {
+          return reply(false, { error: "Purchase code already used ❌" });
+        }
 
-      purchaseCode = promoCode;
+        purchaseCode = pc.code;
 
-      // Mark redeemed
-      await db.query(
-        `UPDATE purchase_codes SET redeemed = true, redeemed_at = now() WHERE id = $1`,
-        [purchaseResult.rows[0].id]
-      );
-    } else {
-      return reply(false, { error: "Invalid code format" });
+        // ✅ Mark code redeemed
+        await db.query(
+          `UPDATE purchase_codes SET redeemed = true, redeemed_at = now() WHERE code = $1`,
+          [promoCode]
+        );
+      } else {
+        return reply(false, { error: "Invalid agent or purchase promo code ❌" });
+      }
     }
 
-    // ✅ Insert into users
+    // ✅ Insert user into table
     const result = await db.query(
-      `INSERT INTO users (first_name, last_name, email, password_hash, phone, promo_code, agent_id, purchase_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING id, first_name, last_name, email, promo_code, agent_id, purchase_code`,
+      `INSERT INTO users (first_name, last_name, email, phone, password_hash, agent_id, purchase_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, email, first_name, last_name, agent_id, purchase_code`,
       [
         firstName,
         lastName,
         email.toLowerCase(),
+        phone || null,
         password_hash,
-        cleanPhone,
-        promoCode,
         agentId,
         purchaseCode,
       ]
