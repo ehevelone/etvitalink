@@ -74,12 +74,18 @@ exports.handler = async (event) => {
       });
     }
 
-    // ✅ Upsert into user_devices (1 device per user)
+    // ✅ Debug log for device info
+    console.log("📱 Device log attempt:", {
+      userId: user.id,
+      platform: platform || "unknown",
+    });
+
+    // ✅ Upsert into user_devices (1 device per user per platform)
     await db.query(
       `INSERT INTO user_devices (user_id, platform, created_at)
        VALUES ($1, $2, NOW())
-       ON CONFLICT (user_id)
-       DO UPDATE SET platform = EXCLUDED.platform, created_at = NOW()`,
+       ON CONFLICT (user_id, platform)
+       DO UPDATE SET created_at = NOW()`,
       [user.id, platform || "unknown"]
     );
 
