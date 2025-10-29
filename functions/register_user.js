@@ -20,7 +20,7 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { firstName, lastName, email, phone, password, promoCode } = body;
+    const { firstName, lastName, email, phone, password, promoCode, platform } = body;
 
     if (!firstName || !lastName || !email || !password || !promoCode) {
       return reply(false, { error: "Missing required fields" });
@@ -86,6 +86,15 @@ exports.handler = async (event) => {
     );
 
     const user = result.rows[0];
+
+    // ✅ Upsert into user_devices (1 device per user)
+    await db.query(
+      `INSERT INTO user_devices (user_id, platform, created_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET platform = EXCLUDED.platform, created_at = NOW()`,
+      [user.id, platform || "unknown"]
+    );
 
     return reply(true, {
       message: "User registered successfully ✅",
