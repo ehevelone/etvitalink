@@ -26,7 +26,7 @@ dependencies:
 
   # ---- Media / Camera ----
   image_picker: 1.0.7       # ✅ safe for Flutter 3.22.x
-  image_cropper: 7.0.5       # ✅ before 8.x bump
+  image_cropper: ^11.0.0       # ✅ before 8.x bump
   image: 4.2.0               # ✅ works with signature >=5.5.0 and launcher_icons
   camera: 0.10.5+9           # ✅ last before Flutter 3.27 bump
   mobile_scanner: 3.4.1      # ✅ stable on Dart 3.4.x

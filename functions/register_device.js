@@ -19,11 +19,25 @@ exports.handler = async (event) => {
       };
     }
 
-    const { userId, deviceToken, platform } = JSON.parse(event.body || "{}");
+    const { email, role, deviceToken, platform } = JSON.parse(event.body || "{}");
 
-    if (!userId || !deviceToken) {
+    if (!email || !deviceToken) {
       return reply(false, { error: "Missing required fields" });
     }
+
+    // 🔎 Look up user ID by email
+    let userRes;
+    if (role === "user") {
+      userRes = await db.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [email.toLowerCase()]);
+    } else if (role === "agent") {
+      userRes = await db.query(`SELECT id FROM agents WHERE email = $1 LIMIT 1`, [email.toLowerCase()]);
+    }
+
+    if (!userRes || !userRes.rows.length) {
+      return reply(false, { error: `No ${role} found with that email` });
+    }
+
+    const userId = userRes.rows[0].id;
 
     // ✅ Upsert device by token
     const result = await db.query(
