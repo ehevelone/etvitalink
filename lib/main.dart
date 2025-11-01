@@ -1,5 +1,14 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ lock orientation
+
+// ✅ Firebase imports for notifications
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+// ✅ Local services
+import 'services/api_service.dart';
+import 'services/secure_store.dart';
 
 // Core screens
 import 'screens/landing_screen.dart';
@@ -46,7 +55,7 @@ import 'screens/agent_reset_password_screen.dart';
 
 import 'models.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ✅ Lock orientation to portrait
@@ -54,8 +63,74 @@ void main() async {
     DeviceOrientation.portraitUp,
   ]);
 
+  // ✅ Initialize Firebase
+  await Firebase.initializeApp();
+
+  // ✅ Background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // ✅ Set up token refresh listener
+  await _setupFirebaseTokenListener();
+
   runApp(const VitaLinkApp());
 }
+
+// ============================================================
+// 🔔 BACKGROUND + TOKEN MANAGEMENT
+// ============================================================
+
+// --- Handles messages when app is terminated or backgrounded
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('📩 Background message: ${message.messageId}');
+}
+
+// --- Keeps the server updated with new tokens
+Future<void> _setupFirebaseTokenListener() async {
+  final fcm = FirebaseMessaging.instance;
+  final store = SecureStore();
+
+  // ✅ Request notification permission (iOS & Android 13+)
+  await fcm.requestPermission();
+
+  // ✅ Grab initial token
+  final token = await fcm.getToken();
+  debugPrint("📱 Initial FCM Token: $token");
+
+  // Try to auto-register if stored credentials exist
+  if (token != null) {
+    final email = await store.get('lastEmail');
+    final role = await store.get('lastRole');
+    if (email != null && role != null) {
+      await ApiService.registerDeviceToken(
+        email: email,
+        fcmToken: token,
+        role: role,
+      );
+      debugPrint("✅ Auto-registered FCM token for $role ($email)");
+    }
+  }
+
+  // ✅ Listen for token refresh
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+    debugPrint("🔁 FCM token refreshed: $newToken");
+    final email = await store.get('lastEmail');
+    final role = await store.get('lastRole');
+    if (email != null && role != null) {
+      await ApiService.registerDeviceToken(
+        email: email,
+        fcmToken: newToken,
+        role: role,
+      );
+      debugPrint("✅ Updated FCM token for $role ($email)");
+    }
+  });
+}
+
+// ============================================================
+// 🧭 APP WIDGET TREE
+// ============================================================
 
 class VitaLinkApp extends StatelessWidget {
   const VitaLinkApp({super.key});
@@ -88,34 +163,34 @@ class VitaLinkApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/account_setup': (context) => const AccountSetupScreen(),
         '/welcome': (context) => const WelcomeScreen(),
-        '/menu': (context) => MenuScreen(), // 🔥 removed const
-        '/my_agent_user': (context) => MyAgentUser(), // 🔥 removed const
+        '/menu': (context) => MenuScreen(),
+        '/my_agent_user': (context) => MyAgentUser(),
 
         // Agent flow
         '/terms_agent': (context) => const TermsAgentScreen(),
         '/agent_registration': (context) => const AgentRegistrationScreen(),
         '/agent_login': (context) => const AgentLoginScreen(),
         '/agent_setup': (context) => const AgentSetupScreen(),
-        '/agent_menu': (context) => AgentMenuScreen(), // 🔥 removed const
-        '/my_agent_agent': (context) => MyAgentAgent(), // 🔥 removed const
+        '/agent_menu': (context) => AgentMenuScreen(),
+        '/my_agent_agent': (context) => MyAgentAgent(),
 
         // Shared
         '/logo': (context) => const LogoScreen(),
-        '/emergency': (context) => EmergencyScreen(), // 🔥 removed const
-        '/emergency_view': (context) => EmergencyView(), // 🔥 removed const
+        '/emergency': (context) => EmergencyScreen(),
+        '/emergency_view': (context) => EmergencyView(),
 
         // Medical / insurance
-        '/meds': (context) => MedsScreen(), // 🔥 removed const
-        '/doctors': (context) => DoctorsScreen(), // 🔥 removed const
-        '/doctors_view': (context) => DoctorsView(), // 🔥 removed const
-        '/insurance_policies': (context) => InsurancePoliciesScreen(), // 🔥 removed const
-        '/insurance_cards_menu': (context) => InsuranceCardsMenuScreen(), // 🔥 removed const
+        '/meds': (context) => MedsScreen(),
+        '/doctors': (context) => DoctorsScreen(),
+        '/doctors_view': (context) => DoctorsView(),
+        '/insurance_policies': (context) => InsurancePoliciesScreen(),
+        '/insurance_cards_menu': (context) => InsuranceCardsMenuScreen(),
 
         // ✅ Unified authorization form
         '/authorization_form': (context) => const HipaaFormScreen(),
 
         // Scanning
-        '/scan_card': (context) => ScanCard(), // 🔥 removed const
+        '/scan_card': (context) => ScanCard(),
 
         // Password reset (user)
         '/request_reset': (context) => const RequestResetScreen(),
@@ -123,7 +198,8 @@ class VitaLinkApp extends StatelessWidget {
 
         // Password reset (agent)
         '/agent_request_reset': (context) => const AgentRequestResetScreen(),
-        '/agent_reset_password': (context) => const AgentResetPasswordScreen(),
+        '/agent_reset_password': (context) =>
+            const AgentResetPasswordScreen(),
       },
 
       // Dynamic argument-based routes

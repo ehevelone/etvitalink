@@ -12,47 +12,54 @@ function reply(success, obj = {}) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: "Method Not Allowed" }),
-      };
+      return reply(false, { error: "Method Not Allowed" });
     }
 
     const { email, role, deviceToken, platform } = JSON.parse(event.body || "{}");
 
-    if (!email || !deviceToken) {
-      return reply(false, { error: "Missing required fields" });
+    if (!email || !deviceToken || !role) {
+      return reply(false, { error: "Missing required fields (email, deviceToken, role)" });
     }
 
-    // 🔎 Look up user ID by email
-    let userRes;
+    console.log("📲 register_device incoming:", { email, role, platform });
+
+    // 🔎 Look up the proper account ID
+    let lookupQuery = "";
     if (role === "user") {
-      userRes = await db.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [email.toLowerCase()]);
+      lookupQuery = `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
     } else if (role === "agent") {
-      userRes = await db.query(`SELECT id FROM agents WHERE email = $1 LIMIT 1`, [email.toLowerCase()]);
+      lookupQuery = `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`;
+    } else {
+      return reply(false, { error: `Invalid role: ${role}` });
     }
 
+    const userRes = await db.query(lookupQuery, [email]);
     if (!userRes || !userRes.rows.length) {
       return reply(false, { error: `No ${role} found with that email` });
     }
 
-    const userId = userRes.rows[0].id;
+    const entityId = userRes.rows[0].id;
+    const idField = role === "agent" ? "agent_id" : "user_id";
 
-    // ✅ Upsert device by token
+    console.log("🧩 Linking token to:", { idField, entityId, platform });
+
+    // ✅ Upsert based on token, setting correct ID field dynamically
     const result = await db.query(
-      `INSERT INTO user_devices (user_id, device_token, platform, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
-       ON CONFLICT (device_token) DO UPDATE 
-         SET updated_at = NOW(),
-             platform = EXCLUDED.platform,
-             user_id = EXCLUDED.user_id
-       RETURNING id, user_id, device_token, platform`,
-      [userId, deviceToken, platform || null]
+      `
+        INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
+        VALUES ($1, $2, $3, NOW(), NOW())
+        ON CONFLICT (device_token)
+        DO UPDATE
+          SET updated_at = NOW(),
+              platform = EXCLUDED.platform,
+              ${idField} = EXCLUDED.${idField}
+        RETURNING id, ${idField}, device_token, platform
+      `,
+      [entityId, deviceToken, platform || null]
     );
 
     return reply(true, {
-      message: "Device registered ✅",
+      message: `Device registered for ${role} ✅`,
       device: result.rows[0],
     });
   } catch (err) {
