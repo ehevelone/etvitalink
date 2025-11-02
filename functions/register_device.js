@@ -43,12 +43,12 @@ exports.handler = async (event) => {
 
     console.log("🧩 Linking token to:", { idField, entityId, platform });
 
-    // ✅ Upsert based on token, using the correct constraint name
+    // ✅ Upsert based on unique constraint name confirmed in DB
     const result = await db.query(
       `
         INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
         VALUES ($1, $2, $3, NOW(), NOW())
-        ON CONFLICT ON CONSTRAINT idx_user_devices_device_token
+        ON CONFLICT ON CONSTRAINT user_devices_device_token_key
         DO UPDATE
           SET updated_at = NOW(),
               platform = EXCLUDED.platform,
