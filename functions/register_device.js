@@ -23,28 +23,28 @@ exports.handler = async (event) => {
 
     console.log("📲 register_device incoming:", { email, role, platform });
 
-    // 🔍 Look up user or agent ID
+    // 🔍 Lookup for correct ID
     const lookupQuery =
       role === "agent"
         ? `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`
         : `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
 
-    const result = await db.query(lookupQuery, [email]);
-    if (!result.rows.length) {
+    const found = await db.query(lookupQuery, [email]);
+    if (!found.rows.length) {
       return reply(false, { error: `No ${role} found with that email` });
     }
 
-    const entityId = result.rows[0].id;
+    const entityId = found.rows[0].id;
     const idField = role === "agent" ? "agent_id" : "user_id";
 
     console.log(`🧩 Linking device → ${role} (${idField}=${entityId})`);
 
-    // ✅ Proper upsert using the actual constraint name in Postgres
-    const insertResult = await db.query(
+    // ✅ Use column-based conflict target — guaranteed valid
+    const upsert = await db.query(
       `
       INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW())
-      ON CONFLICT ON CONSTRAINT user_devices_device_token_key
+      ON CONFLICT (device_token)
       DO UPDATE
         SET updated_at = NOW(),
             platform = EXCLUDED.platform,
@@ -54,9 +54,10 @@ exports.handler = async (event) => {
       [entityId, deviceToken, platform || null]
     );
 
+    console.log("✅ Device registered:", upsert.rows[0]);
     return reply(true, {
       message: `Device registered for ${role} ✅`,
-      device: insertResult.rows[0],
+      device: upsert.rows[0],
     });
   } catch (err) {
     console.error("❌ register_device error:", err);
