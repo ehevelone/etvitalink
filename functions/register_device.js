@@ -1,4 +1,6 @@
 // functions/register_device.js
+console.log("⚙️ register_device build v2.3.1");
+
 const db = require("../services/db");
 
 function reply(success, obj = {}) {
