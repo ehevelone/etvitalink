@@ -24,12 +24,14 @@ exports.handler = async (event) => {
     console.log("📲 register_device incoming:", { email, role, platform });
 
     // 🔍 Look up the proper account ID
-    let lookupQuery = "";
-    if (role === "user") {
-      lookupQuery = `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
-    } else if (role === "agent") {
-      lookupQuery = `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`;
-    } else {
+    const lookupQuery =
+      role === "user"
+        ? `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`
+        : role === "agent"
+        ? `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`
+        : null;
+
+    if (!lookupQuery) {
       return reply(false, { error: `Invalid role: ${role}` });
     }
 
@@ -43,7 +45,7 @@ exports.handler = async (event) => {
 
     console.log("🧩 Linking token to:", { idField, entityId, platform });
 
-    // ✅ Upsert based on unique constraint name confirmed in DB
+    // ✅ Upsert based on the correct constraint name
     const result = await db.query(
       `
         INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
@@ -53,7 +55,7 @@ exports.handler = async (event) => {
           SET updated_at = NOW(),
               platform = EXCLUDED.platform,
               ${idField} = EXCLUDED.${idField}
-        RETURNING id, ${idField}, device_token, platform
+        RETURNING id, ${idField}, device_token, platform;
       `,
       [entityId, deviceToken, platform || null]
     );
