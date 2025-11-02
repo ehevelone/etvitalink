@@ -1,6 +1,7 @@
 // functions/register_device.js
 const db = require("../services/db");
 
+// ✅ Consistent JSON replies
 function reply(success, obj = {}) {
   return {
     statusCode: 200,
@@ -11,19 +12,22 @@ function reply(success, obj = {}) {
 
 exports.handler = async (event) => {
   try {
+    // --- Safety check ---
     if (event.httpMethod !== "POST") {
       return reply(false, { error: "Method Not Allowed" });
     }
 
+    // --- Parse and validate incoming body ---
     const { email, role, deviceToken, platform } = JSON.parse(event.body || "{}");
-
     if (!email || !deviceToken || !role) {
-      return reply(false, { error: "Missing required fields (email, deviceToken, role)" });
+      return reply(false, {
+        error: "Missing required fields (email, deviceToken, role)",
+      });
     }
 
     console.log("📲 Incoming registration:", { email, role, platform });
 
-    // 🔍 1. Find matching ID in correct table
+    // --- 1️⃣ Look up account ID ---
     let lookupQuery;
     if (role === "user") {
       lookupQuery = `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
@@ -40,9 +44,9 @@ exports.handler = async (event) => {
 
     const entityId = res.rows[0].id;
     const idField = role === "agent" ? "agent_id" : "user_id";
-    console.log("🧩 Linking device to:", { idField, entityId });
+    console.log("🧩 Linking device:", { idField, entityId });
 
-    // 🔧 2. Insert or update device row
+    // --- 2️⃣ Upsert into user_devices ---
     const upsertQuery = `
       INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW())
@@ -51,16 +55,35 @@ exports.handler = async (event) => {
         SET updated_at = NOW(),
             platform = EXCLUDED.platform,
             ${idField} = EXCLUDED.${idField}
-      RETURNING id, ${idField}, device_token, platform, updated_at;
+      RETURNING device_token, ${idField}, platform, updated_at;
     `;
+    const upsertRes = await db.query(upsertQuery, [
+      entityId,
+      deviceToken,
+      platform || null,
+    ]);
 
-    const result = await db.query(upsertQuery, [entityId, deviceToken, platform || null]);
+    console.log("✅ Device row updated:", upsertRes.rows[0]);
 
-    console.log("✅ Device registered or updated:", result.rows[0]);
+    // --- 3️⃣ Sync latest token to main table ---
+    if (role === "user") {
+      await db.query(
+        `UPDATE users SET device_token = $1, updated_at = NOW() WHERE id = $2`,
+        [deviceToken, entityId]
+      );
+    } else if (role === "agent") {
+      await db.query(
+        `UPDATE agents SET device_token = $1, updated_at = NOW() WHERE id = $2`,
+        [deviceToken, entityId]
+      );
+    }
 
+    console.log("🔄 Token synced to main table:", { role, entityId });
+
+    // --- 4️⃣ Return success ---
     return reply(true, {
-      message: `Device registered for ${role} ✅`,
-      device: result.rows[0],
+      message: `Device registered and synced for ${role} ✅`,
+      device: upsertRes.rows[0],
     });
   } catch (err) {
     console.error("❌ register_device error:", err);
