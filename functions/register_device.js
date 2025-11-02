@@ -21,44 +21,42 @@ exports.handler = async (event) => {
       return reply(false, { error: "Missing required fields (email, deviceToken, role)" });
     }
 
-    console.log("📲 register_device incoming:", { email, role, platform });
+    console.log("📲 Incoming registration:", { email, role, platform });
 
-    // 🔍 Look up the proper account ID
-    const lookupQuery =
-      role === "user"
-        ? `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`
-        : role === "agent"
-        ? `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`
-        : null;
-
-    if (!lookupQuery) {
+    // 🔍 1. Find matching ID in correct table
+    let lookupQuery;
+    if (role === "user") {
+      lookupQuery = `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
+    } else if (role === "agent") {
+      lookupQuery = `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`;
+    } else {
       return reply(false, { error: `Invalid role: ${role}` });
     }
 
-    const userRes = await db.query(lookupQuery, [email]);
-    if (!userRes || !userRes.rows.length) {
+    const res = await db.query(lookupQuery, [email]);
+    if (!res || res.rows.length === 0) {
       return reply(false, { error: `No ${role} found with that email` });
     }
 
-    const entityId = userRes.rows[0].id;
+    const entityId = res.rows[0].id;
     const idField = role === "agent" ? "agent_id" : "user_id";
+    console.log("🧩 Linking device to:", { idField, entityId });
 
-    console.log("🧩 Linking token to:", { idField, entityId, platform });
+    // 🔧 2. Insert or update device row
+    const upsertQuery = `
+      INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (device_token)
+      DO UPDATE
+        SET updated_at = NOW(),
+            platform = EXCLUDED.platform,
+            ${idField} = EXCLUDED.${idField}
+      RETURNING id, ${idField}, device_token, platform, updated_at;
+    `;
 
-    // ✅ Upsert based on the correct constraint name
-    const result = await db.query(
-      `
-        INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
-        VALUES ($1, $2, $3, NOW(), NOW())
-        ON CONFLICT ON CONSTRAINT user_devices_device_token_key
-        DO UPDATE
-          SET updated_at = NOW(),
-              platform = EXCLUDED.platform,
-              ${idField} = EXCLUDED.${idField}
-        RETURNING id, ${idField}, device_token, platform;
-      `,
-      [entityId, deviceToken, platform || null]
-    );
+    const result = await db.query(upsertQuery, [entityId, deviceToken, platform || null]);
+
+    console.log("✅ Device registered or updated:", result.rows[0]);
 
     return reply(true, {
       message: `Device registered for ${role} ✅`,
