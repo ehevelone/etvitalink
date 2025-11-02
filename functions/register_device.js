@@ -23,7 +23,7 @@ exports.handler = async (event) => {
 
     console.log("📲 register_device incoming:", { email, role, platform });
 
-    // 🔎 Look up the proper account ID
+    // 🔍 Look up the proper account ID
     let lookupQuery = "";
     if (role === "user") {
       lookupQuery = `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
@@ -43,12 +43,12 @@ exports.handler = async (event) => {
 
     console.log("🧩 Linking token to:", { idField, entityId, platform });
 
-    // ✅ Upsert based on token, setting correct ID field dynamically
+    // ✅ Upsert based on token, using the correct constraint name
     const result = await db.query(
       `
         INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
         VALUES ($1, $2, $3, NOW(), NOW())
-        ON CONFLICT (device_token)
+        ON CONFLICT ON CONSTRAINT idx_user_devices_device_token
         DO UPDATE
           SET updated_at = NOW(),
               platform = EXCLUDED.platform,
