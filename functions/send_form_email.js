@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const db = require("../services/db"); // ✅ Add DB
 
 exports.handler = async (event) => {
   try {
@@ -22,14 +23,13 @@ exports.handler = async (event) => {
       attachments: [],
     };
 
-    // 🧑‍⚕️ User sends signed HIPAA & SOA with data
+    // 🧑‍⚕️ User sends signed HIPAA & SOA
     if (body.agent && body.agent.email) {
       const { agent, user, meds, doctors, body: clientBody, attachments } = body;
 
       mailOptions.to = agent.email;
       mailOptions.subject = `VitaLink - Documents from ${user || "Client"}`;
 
-      // ✅ Use body text from Flutter if provided, else build fallback summary
       if (clientBody) {
         mailOptions.text = clientBody;
       } else {
@@ -37,18 +37,21 @@ exports.handler = async (event) => {
         const doctorsCount = (doctors && doctors.length) || 0;
         mailOptions.text = `Hello ${agent.name || "Agent"},
 
-Your client ${user || "Client"} has shared the following via VitaLink:
+Your client ${user || "Client"} has shared their completed intake info:
 
-- HIPAA & SOA Authorization: ✅ Signed
-- Medications: ${medsCount} item${medsCount === 1 ? "" : "s"}
-- Doctors: ${doctorsCount} item${doctorsCount === 1 ? "" : "s"}
+• HIPAA & SOA Authorization: ✅ Signed
+• Medications: ${medsCount}
+• Doctors: ${doctorsCount}
 
-Attachments include PDF (signed form), CSV (meds/doctors), and JSON exports.
+Attachments include:
+• Signed authorization PDF
+• Medication/doctor lists
+• JSON export for record keeping
 
 - VitaLink`;
       }
 
-      // ✅ Decode base64 attachments (PDF, CSV, etc.)
+      // ✅ Attach uploaded files
       if (attachments && Array.isArray(attachments)) {
         attachments.forEach((att) => {
           if (att.content) {
@@ -60,7 +63,7 @@ Attachments include PDF (signed form), CSV (meds/doctors), and JSON exports.
         });
       }
 
-      // ✅ Always include JSON snapshots for backend/system import
+      // ✅ JSON snapshots
       mailOptions.attachments.push({
         filename: "Meds.json",
         content: JSON.stringify(meds || [], null, 2),
@@ -70,8 +73,17 @@ Attachments include PDF (signed form), CSV (meds/doctors), and JSON exports.
         content: JSON.stringify(doctors || [], null, 2),
       });
 
-      // 🚀 Send email
+      // 🚀 Send the email
       await transporter.sendMail(mailOptions);
+
+      // ✅ Mark user complete for this AEP year
+      await db.query(
+        `UPDATE users 
+         SET status = 'complete', 
+             last_review_year = EXTRACT(YEAR FROM CURRENT_DATE)
+         WHERE LOWER(email) = LOWER($1)`,
+        [user]
+      );
 
       return {
         statusCode: 200,
@@ -83,7 +95,6 @@ Attachments include PDF (signed form), CSV (meds/doctors), and JSON exports.
       };
     }
 
-    // ❌ Invalid request
     return { statusCode: 400, body: JSON.stringify({ error: "Invalid payload" }) };
   } catch (err) {
     console.error("❌ send_form_email error", err);

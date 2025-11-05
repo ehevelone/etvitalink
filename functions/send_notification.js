@@ -2,10 +2,9 @@
 const db = require("../services/db");
 const admin = require("firebase-admin");
 
-// ✅ Load service account JSON from Netlify env
+// Firebase Credentials from Netlify ENV
 const serviceAccount = JSON.parse(process.env.FCM_SERVICE_ACCOUNT || "{}");
 
-// ✅ Initialize Firebase Admin SDK once
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -23,52 +22,68 @@ function reply(success, obj = {}) {
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
+      return reply(false, { error: "Method Not Allowed" });
     }
 
     const { agentEmail } = JSON.parse(event.body || "{}");
-    if (!agentEmail) {
-      return reply(false, { error: "Missing agentEmail" });
-    }
+    if (!agentEmail) return reply(false, { error: "Missing agentEmail" });
 
-    // 1️⃣ Get the agent by email
+    // 1️⃣ Get agent record
     const agentRes = await db.query(
-      "SELECT id, name FROM agents WHERE email = $1 LIMIT 1",
+      `SELECT id, name FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`,
       [agentEmail]
     );
-    if (!agentRes.rows.length) {
-      return reply(false, { error: "Agent not found" });
-    }
+    if (!agentRes.rows.length) return reply(false, { error: "Agent not found" });
     const agent = agentRes.rows[0];
 
-    // 2️⃣ Get all users tied to that agent
+    // 2️⃣ Determine Medicare processing year
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const cycleYear = (now.getMonth() + 1) <= 3 ? currentYear - 1 : currentYear;
+
+    // 3️⃣ Reset users who haven't submitted for this year's cycle
+    await db.query(
+      `UPDATE users
+       SET status = 'not_started'
+       WHERE agent_id = $1
+       AND (last_review_year IS NULL OR last_review_year < $2)`,
+      [agent.id, cycleYear]
+    );
+
+    // 4️⃣ Select only users who have NOT submitted this year
     const usersRes = await db.query(
-      "SELECT id FROM users WHERE agent_id = $1",
+      `SELECT id FROM users
+       WHERE agent_id = $1
+       AND status = 'not_started'`,
       [agent.id]
     );
+
     if (!usersRes.rows.length) {
-      return reply(false, { error: "No users registered for this agent" });
+      return reply(true, { message: "✅ Everyone is already completed for this cycle!" });
     }
+
     const userIds = usersRes.rows.map((u) => u.id);
 
-    // 3️⃣ Get devices for those users
+    // 5️⃣ Fetch tokens for those users
     const devicesRes = await db.query(
-      `SELECT device_token 
-       FROM user_devices 
-       WHERE user_id = ANY($1::int[]) 
+      `SELECT device_token
+       FROM user_devices
+       WHERE user_id = ANY($1::int[])
        AND device_token IS NOT NULL`,
       [userIds]
     );
+
     if (!devicesRes.rows.length) {
-      return reply(false, { error: "No registered devices for these users" });
+      return reply(false, { error: "No registered devices to notify" });
     }
+
     const deviceTokens = devicesRes.rows.map((d) => d.device_token);
 
-    // 4️⃣ Push notification payload
+    // 6️⃣ Build notification
     const message = {
       notification: {
         title: `Message from ${agent.name || "Your Agent"}`,
-        body: "⏰ Time to send your information to your agent!",
+        body: "⏰ Time to send your Medicare information!",
       },
       tokens: deviceTokens,
       data: {
@@ -77,14 +92,16 @@ exports.handler = async (event) => {
       },
     };
 
-    // ✅ Updated for Firebase Admin SDK v12+
+    // 7️⃣ Send it
     const response = await admin.messaging().sendEachForMulticast(message);
 
     return reply(true, {
-      message: "Notification sent ✅",
+      message: "✅ Notifications sent",
+      usersContacted: userIds.length,
       successCount: response.successCount,
       failureCount: response.failureCount,
     });
+
   } catch (err) {
     console.error("❌ send_notification error:", err);
     return reply(false, { error: "Server error: " + err.message });
