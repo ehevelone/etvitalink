@@ -30,29 +30,29 @@ exports.handler = async (event) => {
 
     // 1️⃣ Get agent record
     const agentRes = await db.query(
-      `SELECT id, name FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      `SELECT id, name FROM public.agents WHERE LOWER(email) = LOWER($1) LIMIT 1`,
       [agentEmail]
     );
     if (!agentRes.rows.length) return reply(false, { error: "Agent not found" });
     const agent = agentRes.rows[0];
 
-    // 2️⃣ Determine Medicare processing year
+    // 2️⃣ Determine Medicare cycle year
     const now = new Date();
     const currentYear = now.getFullYear();
     const cycleYear = (now.getMonth() + 1) <= 3 ? currentYear - 1 : currentYear;
 
-    // 3️⃣ Reset users who haven't submitted for this year's cycle
+    // 3️⃣ Reset users not completed for this cycle
     await db.query(
-      `UPDATE users
+      `UPDATE public.users
        SET status = 'not_started'
        WHERE agent_id = $1
        AND (last_review_year IS NULL OR last_review_year < $2)`,
       [agent.id, cycleYear]
     );
 
-    // 4️⃣ Select only users who have NOT submitted this year
+    // 4️⃣ Select only users who still need to submit
     const usersRes = await db.query(
-      `SELECT id FROM users
+      `SELECT id FROM public.users
        WHERE agent_id = $1
        AND status = 'not_started'`,
       [agent.id]
@@ -64,10 +64,10 @@ exports.handler = async (event) => {
 
     const userIds = usersRes.rows.map((u) => u.id);
 
-    // 5️⃣ Fetch tokens for those users
+    // 5️⃣ Get device tokens
     const devicesRes = await db.query(
       `SELECT device_token
-       FROM user_devices
+       FROM public.user_devices
        WHERE user_id = ANY($1::int[])
        AND device_token IS NOT NULL`,
       [userIds]
@@ -92,7 +92,7 @@ exports.handler = async (event) => {
       },
     };
 
-    // 7️⃣ Send it
+    // 7️⃣ Send push
     const response = await admin.messaging().sendEachForMulticast(message);
 
     return reply(true, {
