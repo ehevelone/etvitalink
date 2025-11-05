@@ -64,7 +64,7 @@ exports.handler = async (event) => {
     }
     const deviceTokens = devicesRes.rows.map((d) => d.device_token);
 
-    // 4️⃣ Hardcoded push notification payload
+    // 4️⃣ Push notification payload
     const message = {
       notification: {
         title: `Message from ${agent.name || "Your Agent"}`,
@@ -73,11 +73,12 @@ exports.handler = async (event) => {
       tokens: deviceTokens,
       data: {
         click_action: "FLUTTER_NOTIFICATION_CLICK",
-        route: "/authorization_form", // ✅ always routes user to HIPAA form
+        route: "/authorization_form",
       },
     };
 
-    const response = await admin.messaging().sendMulticast(message);
+    // ✅ Updated for Firebase Admin SDK v12+
+    const response = await admin.messaging().sendEachForMulticast(message);
 
     return reply(true, {
       message: "Notification sent ✅",

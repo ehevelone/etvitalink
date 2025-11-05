@@ -3,10 +3,8 @@
 # ============================
 
 [build]
-  # The folder Netlify will deploy publicly (for static files)
-  publish = "public"
-
-  # No frontend build step (backend only project)
+  # Deploy the current backend directory (no /public folder needed)
+  publish = "."
   command = "echo 'No frontend build step needed'"
 
 # ============================
@@ -19,7 +17,7 @@
   # Use esbuild for fast bundling
   node_bundler = "esbuild"
 
-  # ✅ Include all Node dependencies that your functions import
+  # ✅ Include all Node dependencies your functions import
   external_node_modules = [
     "pg",          # PostgreSQL
     "nodemailer",  # Email sending

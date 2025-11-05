@@ -32,7 +32,7 @@ exports.handler = async (event) => {
     let agentId = null;
     let purchaseCode = null;
 
-    // 🔎 Check if promoCode belongs to an Agent (unlock_code)
+    // 🔎 Agent unlock code
     const agentResult = await db.query(
       `SELECT id, active FROM agents WHERE unlock_code = $1 LIMIT 1`,
       [promoCode]
@@ -45,7 +45,7 @@ exports.handler = async (event) => {
       }
       agentId = agent.id;
     } else {
-      // 🔎 Otherwise, check if it is a purchase code
+      // 🔎 Purchase Code
       const purchaseResult = await db.query(
         `SELECT code, redeemed FROM purchase_codes WHERE code = $1 LIMIT 1`,
         [promoCode]
@@ -59,7 +59,6 @@ exports.handler = async (event) => {
 
         purchaseCode = pc.code;
 
-        // ✅ Mark code redeemed
         await db.query(
           `UPDATE purchase_codes SET redeemed = true, redeemed_at = now() WHERE code = $1`,
           [promoCode]
@@ -69,7 +68,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ✅ Insert user into table
+    // ✅ Insert user
     const result = await db.query(
       `INSERT INTO users (first_name, last_name, email, phone, password_hash, agent_id, purchase_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -87,12 +86,12 @@ exports.handler = async (event) => {
 
     const user = result.rows[0];
 
-    // ✅ Upsert into user_devices (1 device per user)
+    // ✅ Correct device upsert (1 device per user)
     await db.query(
-      `INSERT INTO user_devices (user_id, platform, created_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (user_id)
-       DO UPDATE SET platform = EXCLUDED.platform, created_at = NOW()`,
+      `INSERT INTO user_devices (user_id, platform, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT ON CONSTRAINT user_devices_user_id_unique
+       DO UPDATE SET platform = EXCLUDED.platform, updated_at = NOW()`,
       [user.id, platform || "unknown"]
     );
 
