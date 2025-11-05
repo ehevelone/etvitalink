@@ -16,19 +16,19 @@ exports.handler = async (event) => {
       return reply(false, { error: "Method Not Allowed" });
     }
 
-    const body = JSON.parse(event.body || "{}");
-    const { email, password } = body;
-
+    const { email, password, platform } = JSON.parse(event.body || "{}");
     if (!email || !password) {
       return reply(false, { error: "Email and password required" });
     }
 
-    // 🔍 Look up user (case-insensitive)
+    // ✅ Lookup user (explicit schema)
     const result = await db.query(
-      `SELECT id, first_name, last_name, email, password_hash, agent_id, purchase_code
-       FROM users
-       WHERE LOWER(email) = LOWER($1)
-       LIMIT 1`,
+      `
+      SELECT id, first_name, last_name, email, password_hash, agent_id, purchase_code
+      FROM public.users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
       [email]
     );
 
@@ -38,20 +38,34 @@ exports.handler = async (event) => {
 
     const user = result.rows[0];
 
-    // 🔑 Check password
+    // ✅ Verify password
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return reply(false, { error: "Invalid password ❌" });
+    if (!validPassword) {
+      return reply(false, { error: "Invalid password ❌" });
+    }
 
-    // ✅ Confirm user access
+    // ✅ Verify user access based on agent subscription
     if (user.agent_id) {
       const agentCheck = await db.query(
-        `SELECT subscription_valid FROM agents WHERE id = $1 LIMIT 1`,
+        `SELECT subscription_valid FROM public.agents WHERE id = $1 LIMIT 1`,
         [user.agent_id]
       );
+
       if (!agentCheck.rows.length || !agentCheck.rows[0].subscription_valid) {
         return reply(false, { error: "Account inactive — contact agent" });
       }
     }
+
+    // ✅ Register ONE device per user
+    await db.query(
+      `
+      INSERT INTO public.user_devices (user_id, platform, created_at, updated_at)
+      VALUES ($1, $2, NOW(), NOW())
+      ON CONFLICT (user_id)
+      DO UPDATE SET platform = EXCLUDED.platform, updated_at = NOW()
+      `,
+      [user.id, platform || "unknown"]
+    );
 
     return reply(true, {
       message: "Login successful ✅",
@@ -61,7 +75,7 @@ exports.handler = async (event) => {
         firstName: user.first_name,
         lastName: user.last_name,
         agent_id: user.agent_id,
-        purchase_code: user.purchase_code,
+        purchase_code: user.purchase_code
       },
     });
 
