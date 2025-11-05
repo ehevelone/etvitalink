@@ -28,20 +28,23 @@ exports.handler = async (event) => {
     const { agentEmail } = JSON.parse(event.body || "{}");
     if (!agentEmail) return reply(false, { error: "Missing agentEmail" });
 
-    // 1️⃣ Get agent record
+    // 1️⃣ Get agent
     const agentRes = await db.query(
-      `SELECT id, name FROM public.agents WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      `SELECT id, name 
+       FROM public.agents 
+       WHERE LOWER(email) = LOWER($1) 
+       LIMIT 1`,
       [agentEmail]
     );
     if (!agentRes.rows.length) return reply(false, { error: "Agent not found" });
     const agent = agentRes.rows[0];
 
-    // 2️⃣ Determine Medicare cycle year
+    // 2️⃣ Determine cycle year
     const now = new Date();
     const currentYear = now.getFullYear();
     const cycleYear = (now.getMonth() + 1) <= 3 ? currentYear - 1 : currentYear;
 
-    // 3️⃣ Reset users not completed for this cycle
+    // 3️⃣ Reset status ONLY IF user hasn't responded this year
     await db.query(
       `UPDATE public.users
        SET status = 'not_started'
@@ -50,21 +53,22 @@ exports.handler = async (event) => {
       [agent.id, cycleYear]
     );
 
-    // 4️⃣ Select only users who still need to submit
+    // 4️⃣ Get users needing notification
     const usersRes = await db.query(
-      `SELECT id FROM public.users
+      `SELECT id 
+       FROM public.users
        WHERE agent_id = $1
        AND status = 'not_started'`,
       [agent.id]
     );
 
     if (!usersRes.rows.length) {
-      return reply(true, { message: "✅ Everyone is already completed for this cycle!" });
+      return reply(true, { message: "✅ Everyone already completed this cycle" });
     }
 
     const userIds = usersRes.rows.map((u) => u.id);
 
-    // 5️⃣ Get device tokens
+    // 5️⃣ Get active device tokens
     const devicesRes = await db.query(
       `SELECT device_token
        FROM public.user_devices
@@ -74,16 +78,16 @@ exports.handler = async (event) => {
     );
 
     if (!devicesRes.rows.length) {
-      return reply(false, { error: "No registered devices to notify" });
+      return reply(false, { error: "No registered device tokens" });
     }
 
     const deviceTokens = devicesRes.rows.map((d) => d.device_token);
 
-    // 6️⃣ Build notification
+    // 6️⃣ Notification payload
     const message = {
       notification: {
         title: `Message from ${agent.name || "Your Agent"}`,
-        body: "⏰ Time to send your Medicare information!",
+        body: "⏰ Time to submit your Medicare information!",
       },
       tokens: deviceTokens,
       data: {
@@ -92,7 +96,7 @@ exports.handler = async (event) => {
       },
     };
 
-    // 7️⃣ Send push
+    // 7️⃣ Send
     const response = await admin.messaging().sendEachForMulticast(message);
 
     return reply(true, {
