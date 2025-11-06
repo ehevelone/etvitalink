@@ -3,7 +3,6 @@
 # ============================
 
 [build]
-  # Deploy the current backend directory (no /public folder needed)
   publish = "."
   command = "echo 'No frontend build step needed'"
 
@@ -11,20 +10,16 @@
 # ✅ Serverless Functions Setup
 # ============================
 [functions]
-  # Folder containing all your Netlify Functions
   directory = "functions"
-
-  # Use esbuild for fast bundling
   node_bundler = "esbuild"
 
-  # ✅ Include all Node dependencies your functions import
   external_node_modules = [
-    "pg",          # PostgreSQL
-    "nodemailer",  # Email sending
-    "qrcode",      # QR code generation
-    "bcryptjs",    # Password hashing
-    "sharp",       # Image processing
-    "twilio"       # SMS service (future use)
+    "pg",
+    "nodemailer",
+    "qrcode",
+    "bcryptjs",
+    "sharp",
+    "twilio"
   ]
 
 # ============================
@@ -32,21 +27,15 @@
 # ============================
 [build.environment]
   NODE_VERSION = "20"
-
-  # Gmail SMTP config (password stays in Netlify env settings)
   SMTP_HOST = "smtp.gmail.com"
   SMTP_PORT = "587"
   SMTP_USER = "ehevelone@gmail.com"
 
 # ============================
 # ✅ Local Development Settings
+# (THIS IS THE FIXED PART)
 # ============================
 [dev]
-  # Port where Netlify Dev proxy will run
-  port = 8888
-
-  # Internal port for functions to run on
-  targetPort = 9999
-
-  # Point to the correct functions folder
   functions = "functions"
+  publish = "."
+  port = 8888

@@ -2,7 +2,6 @@
 const db = require("../services/db");
 const admin = require("firebase-admin");
 
-// Firebase Credentials from Netlify ENV
 const serviceAccount = JSON.parse(process.env.FCM_SERVICE_ACCOUNT || "{}");
 
 if (!admin.apps.length) {
@@ -28,7 +27,7 @@ exports.handler = async (event) => {
     const { agentEmail } = JSON.parse(event.body || "{}");
     if (!agentEmail) return reply(false, { error: "Missing agentEmail" });
 
-    // ✅ 1. Get Agent from public.agents
+    // ✅ Get agent info
     const agentRes = await db.query(
       `SELECT id, name
        FROM public.agents
@@ -37,39 +36,24 @@ exports.handler = async (event) => {
       [agentEmail]
     );
 
-    if (!agentRes.rows.length) return reply(false, { error: "Agent not found" });
+    if (!agentRes.rows.length) {
+      return reply(false, { error: "Agent not found" });
+    }
     const agent = agentRes.rows[0];
 
-    // ✅ 2. Determine Medicare cycle year
-    const now = new Date();
-    const year = now.getFullYear();
-    const cycleYear = (now.getMonth() + 1) <= 3 ? year - 1 : year;
-
-    // ✅ 3. Reset users who haven't submitted this year
-    await db.query(
-      `UPDATE public.users
-       SET status = 'not_started'
-       WHERE agent_id = $1
-       AND (last_review_year IS NULL OR last_review_year < $2)`,
-      [agent.id, cycleYear]
-    );
-
-    // ✅ 4. Get users needing notifications
+    // ✅ Get all users linked to this agent
     const usersRes = await db.query(
-      `SELECT id
-       FROM public.users
-       WHERE agent_id = $1
-       AND status = 'not_started'`,
+      `SELECT id FROM public.users WHERE agent_id = $1`,
       [agent.id]
     );
 
     if (!usersRes.rows.length) {
-      return reply(true, { message: "✅ Everyone already completed for this cycle!" });
+      return reply(false, { error: "No users linked to this agent" });
     }
 
-    const userIds = usersRes.rows.map((u) => u.id);
+    const userIds = usersRes.rows.map(u => u.id);
 
-    // ✅ 5. Pull registered devices (public.user_devices)
+    // ✅ Get device tokens for these users
     const devicesRes = await db.query(
       `SELECT device_token
        FROM public.user_devices
@@ -82,15 +66,15 @@ exports.handler = async (event) => {
       return reply(false, { error: "No registered devices for these users" });
     }
 
-    const deviceTokens = devicesRes.rows.map((d) => d.device_token);
+    const tokens = devicesRes.rows.map(d => d.device_token);
 
-    // ✅ 6. Push notification
+    // ✅ Send notification
     const message = {
       notification: {
         title: `Message from ${agent.name || "Your Agent"}`,
         body: "⏰ Time to send your Medicare information!",
       },
-      tokens: deviceTokens,
+      tokens,
       data: {
         click_action: "FLUTTER_NOTIFICATION_CLICK",
         route: "/authorization_form",
@@ -101,10 +85,11 @@ exports.handler = async (event) => {
 
     return reply(true, {
       message: "✅ Notifications sent",
-      usersContacted: userIds.length,
       successCount: response.successCount,
       failureCount: response.failureCount,
+      totalDevices: tokens.length,
     });
+
   } catch (err) {
     console.error("❌ send_notification error:", err);
     return reply(false, { error: "Server error: " + err.message });
