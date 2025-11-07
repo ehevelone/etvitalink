@@ -3,6 +3,8 @@
 # ============================
 
 [build]
+  # ⛔ Temporarily disable Netlify builds (prevents NF from rebuilding on GH push)
+  ignore = "exit 0"
   publish = "."
   command = "echo 'No frontend build step needed'"
 
