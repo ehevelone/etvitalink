@@ -85,14 +85,14 @@ class ApiService {
     }
   }
 
-  // 🔹 Verify promo code (used by agents & users)
+  // 🔹 Verify promo code
   static Future<Map<String, dynamic>> verifyPromo({
     required String username,
     required String promoCode,
   }) async {
     try {
       final res = await http.post(
-        Uri.parse("$_baseUrl/vpc"), // ✅ your backend verify endpoint
+        Uri.parse("$_baseUrl/vpc"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"username": username, "promoCode": promoCode}),
       );
@@ -103,7 +103,7 @@ class ApiService {
     }
   }
 
-  // 🔹 Issue new agent unlock (Admin / Agent Menu)
+  // 🔹 Issue new agent unlock
   static Future<Map<String, dynamic>> issueAgentCode({
     required String masterKey,
     String? requestedEmail,
@@ -127,7 +127,7 @@ class ApiService {
     }
   }
 
-  // 🔹 Request password reset (email only)
+  // 🔹 Request password reset
   static Future<Map<String, dynamic>> requestPasswordReset(String email) async {
     try {
       final res = await http.post(
@@ -163,9 +163,7 @@ class ApiService {
     }
   }
 
-  // ✅ NEW BELOW ------------------------------------------------------
-
-  // 🔹 Get latest promo code for the logged-in agent
+  // 🔹 Get latest promo code for logged-in agent
   static Future<Map<String, dynamic>> getAgentPromoCode(String email) async {
     try {
       final res = await http.post(
@@ -180,7 +178,7 @@ class ApiService {
     }
   }
 
-  // 🔹 Verify promo code (for registration & MyAgentAgent)
+  // 🔹 Verify promo code (alternate)
   static Future<Map<String, dynamic>> verifyPromoCode(
       String username, String promoCode) async {
     try {
@@ -192,6 +190,30 @@ class ApiService {
       return jsonDecode(res.body);
     } catch (e) {
       debugPrint("❌ verifyPromoCode error: $e");
+      return {"success": false, "error": e.toString()};
+    }
+  }
+
+  // ✅ RESTORED: push notification device registration
+  static Future<Map<String, dynamic>> registerDeviceToken({
+    required String email,
+    required String fcmToken,
+    required String role,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse("$_baseUrl/register_device"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "token": fcmToken,
+          "role": role,
+        }),
+      );
+
+      return jsonDecode(res.body);
+    } catch (e) {
+      debugPrint("❌ registerDeviceToken error: $e");
       return {"success": false, "error": e.toString()};
     }
   }
