@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.etenterprises.vitalink">
 
     <!-- ✅ Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -23,7 +24,7 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- ✅ VitaLink Deep Link (Handles vitalink://agent/onboard?code=XYZ) -->
+            <!-- ✅ VitaLink Deep Link -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -34,16 +35,18 @@
                     android:pathPrefix="/onboard" />
             </intent-filter>
 
-            <!-- ✅ Standard app launcher -->
+            <!-- ✅ Launcher entry point -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- Required by Flutter -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
 
 </manifest>
