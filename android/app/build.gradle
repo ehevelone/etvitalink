@@ -43,10 +43,13 @@ flutter {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
 
-    // ✅ Align Firebase modules to the same version
+    // ✅ Align Firebase modules to a unified version family
     implementation platform("com.google.firebase:firebase-bom:32.7.2")
 
-    // ✅ Remove the deprecated IID library that conflicts with Firebase Messaging
+    // ✅ Fix ML Kit / AAPT “android:attr/lStar not found”
+    implementation 'com.google.android.material:material:1.9.0'
+
+    // ✅ Remove legacy Firebase IID to prevent duplicate class errors
     configurations.all {
         exclude group: "com.google.firebase", module: "firebase-iid"
     }
