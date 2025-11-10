@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace "com.vitalink"          // ✅ clean production namespace
+    namespace "com.etenterprises.vitalink"
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.vitalink"  // ✅ must match namespace
+        applicationId "com.etenterprises.vitalink"
         minSdkVersion flutter.minSdkVersion
         targetSdk 36
         versionCode 1
@@ -42,4 +42,12 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+
+    // ✅ Align Firebase modules to the same version
+    implementation platform("com.google.firebase:firebase-bom:32.7.2")
+
+    // ✅ Remove the deprecated IID library that conflicts with Firebase Messaging
+    configurations.all {
+        exclude group: "com.google.firebase", module: "firebase-iid"
+    }
 }
