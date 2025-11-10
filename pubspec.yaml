@@ -49,8 +49,8 @@ dependencies:
   # ---- Deep Linking ----
   app_links: 6.3.2
 
-  # ---- Firebase (required for notifications) ----
-  firebase_core: ^3.8.0
+  # ---- Firebase (correct version pairing) ----
+  firebase_core: ^2.32.0
   firebase_messaging: ^14.9.1
 
   # ---- Icons ----
