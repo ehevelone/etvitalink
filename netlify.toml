@@ -1,3 +1,7 @@
+[build]
+  functions = "functions"
+  publish = "build/web"
+
 [functions]
-directory = "functions"
-node_bundler = "esbuild"
+  directory = "functions"
+  node_bundler = "esbuild"
