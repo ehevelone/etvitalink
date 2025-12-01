@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Shortcut Labels -->
+    <string name="shortcut_emergency_short">Emergency Info</string>
+    <string name="shortcut_emergency_long">Open Emergency Information</string>
+
+    <!-- App Name (keeps Play Store consistency) -->
+    <string name="app_name">vitalink</string>
+
+</resources>
