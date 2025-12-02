@@ -1,6 +1,6 @@
 [build]
-  command = "flutter build web --release"
-  publish = "build/web"
+  command = "echo 'Skipping Flutter build – API only'"
+  publish = "public"
 
 [functions]
   directory = "functions"
