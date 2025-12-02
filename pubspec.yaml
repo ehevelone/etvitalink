@@ -70,3 +70,7 @@ flutter_icons:
   android: true
   ios: true
   image_path: "assets/images/app_icon.png"
+
+dependency_overrides:
+  # Fix image_cropper web build: avoid Color.toARGB32() usage
+  image_cropper_platform_interface: 7.1.0
