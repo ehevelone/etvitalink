@@ -1,10 +1,12 @@
 [build]
   publish = "build/web"
+  command = "flutter build web --release"
+
+[build.environment]
+  FLUTTER_VERSION = "3.24.4"
 
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  external_node_modules = ["pg", "bcryptjs"]
-
-# 🚨 this prevents tree-shaking from removing db.js
-included_files = ["functions/services/**/*.js"]
+  external_node_modules = ["pg", "bcryptjs", "firebase-admin", "nodemailer", "qrcode"]
+  included_files = ["functions/services/**/*.js"]
