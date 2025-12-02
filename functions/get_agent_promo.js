@@ -1,5 +1,5 @@
 // functions/get_agent_promo.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 function ok(obj) {
   return {

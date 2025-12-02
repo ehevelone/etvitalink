@@ -1,5 +1,5 @@
 // functions/register_device_v2.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 function reply(success, obj = {}) {
   return {

@@ -1,8 +1,7 @@
 // functions/agent_onboard.js
-const db = require("../services/db");
+const db = require("./services/db");
 const crypto = require("crypto");
 
-// 🔹 Utility to generate a random unlock code (prefix AG-XXXXXXX)
 function generateUnlockCode(prefix = "AG", length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -12,18 +11,15 @@ function generateUnlockCode(prefix = "AG", length = 10) {
   return `${prefix}-${code}`;
 }
 
-// 🔹 Utility to generate a secure random token
 function generateToken() {
-  return crypto.randomBytes(16).toString("hex"); // 32-char token
+  return crypto.randomBytes(16).toString("hex");
 }
 
 exports.handler = async () => {
   try {
-    // 1️⃣ Generate both unlock code and secure token
     const unlockCode = generateUnlockCode();
     const onboardToken = generateToken();
 
-    // 2️⃣ Insert a new inactive agent record with both
     const result = await db.query(
       `INSERT INTO agents (role, active, unlock_code, onboard_token, created_at)
        VALUES ('agent', FALSE, $1, $2, NOW())
@@ -32,8 +28,6 @@ exports.handler = async () => {
     );
 
     const agentId = result.rows[0].id;
-
-    // 3️⃣ Build redirect URL back to your Netlify onboarding page (token-based)
     const redirectUrl = `https://vitalink-app.netlify.app/agent-onboard.html?token=${encodeURIComponent(onboardToken)}`;
 
     console.log(`✅ Agent ${agentId} created`);
@@ -41,12 +35,9 @@ exports.handler = async () => {
     console.log(`🔑 Token: ${onboardToken}`);
     console.log(`🔗 Redirecting to: ${redirectUrl}`);
 
-    // 4️⃣ Redirect browser to your hosted HTML page (Netlify)
     return {
       statusCode: 302,
-      headers: {
-        Location: redirectUrl,
-      },
+      headers: { Location: redirectUrl },
     };
   } catch (err) {
     console.error("❌ Error in agent_onboard:", err);

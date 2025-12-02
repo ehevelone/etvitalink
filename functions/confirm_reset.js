@@ -1,7 +1,7 @@
 // functions/confirm_reset.js
-const db = require("../services/db");
+const db = require("./services/db");
 const crypto = require("crypto");
-
+const db = require("./services/db");
 function hashPassword(password) {
   return crypto.createHash("sha256").update(password).digest("hex");
 }

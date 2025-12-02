@@ -1,7 +1,7 @@
 // functions/check_agent.js
 // 🚀 Updated 2025-10-16 with case-insensitive email match + safer handling
 
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function ok(obj) {
@@ -29,7 +29,6 @@ exports.handler = async (event) => {
       return fail("Missing email or password.");
     }
 
-    // ✅ Case-insensitive email lookup
     const result = await db.query(
       "SELECT * FROM agents WHERE LOWER(email) = LOWER($1)",
       [email.trim()]
@@ -43,13 +42,11 @@ exports.handler = async (event) => {
     const agent = result.rows[0];
     console.log("🔍 Agent ID:", agent.id, "Active:", agent.active);
 
-    // ✅ Handle missing password_hash gracefully
     if (!agent.password_hash) {
       console.error("❌ No password hash found for agent:", agent.id);
       return fail("Agent account not set up correctly. Contact support.");
     }
 
-    // ✅ Compare password
     const isMatch = await bcrypt.compare(password, agent.password_hash);
     console.log("🔑 Compare result:", isMatch);
 
@@ -61,7 +58,6 @@ exports.handler = async (event) => {
       return fail("This account has been disabled.");
     }
 
-    // ✅ Return clean agent object (no password hash ever sent back)
     return ok({
       message: "Agent login successful ✅",
       agent: {

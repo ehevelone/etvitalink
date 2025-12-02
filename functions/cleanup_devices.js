@@ -1,5 +1,5 @@
 // functions/cleanup_devices.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 function reply(success, obj = {}) {
   return {
@@ -13,11 +13,9 @@ exports.handler = async () => {
   try {
     console.log("🧹 Starting event-based device cleanup...");
 
-    // Count before cleanup
     const before = await db.query(`SELECT COUNT(*) FROM user_devices`);
     console.log(`📊 Devices before cleanup: ${before.rows[0].count}`);
 
-    // 1️⃣ Remove devices where neither agent_id nor user_id exist in parent tables
     const orphanCleanup = await db.query(`
       DELETE FROM user_devices ud
       WHERE
@@ -33,7 +31,6 @@ exports.handler = async () => {
     `);
     console.log(`🗑️ Removed orphaned or dangling devices: ${orphanCleanup.rowCount}`);
 
-    // Count after cleanup
     const after = await db.query(`SELECT COUNT(*) FROM user_devices`);
     console.log(`📊 Devices after cleanup: ${after.rows[0].count}`);
 

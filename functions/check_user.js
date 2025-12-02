@@ -1,5 +1,5 @@
 // functions/check_user.js
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function reply(success, obj = {}) {
@@ -21,7 +21,6 @@ exports.handler = async (event) => {
       return reply(false, { error: "Email and password required" });
     }
 
-    // ✅ Lookup user (explicit schema)
     const result = await db.query(
       `
       SELECT id, first_name, last_name, email, password_hash, agent_id, purchase_code
@@ -38,13 +37,11 @@ exports.handler = async (event) => {
 
     const user = result.rows[0];
 
-    // ✅ Verify password
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
       return reply(false, { error: "Invalid password ❌" });
     }
 
-    // ✅ Verify user access based on agent subscription
     if (user.agent_id) {
       const agentCheck = await db.query(
         `SELECT subscription_valid FROM public.agents WHERE id = $1 LIMIT 1`,
@@ -56,7 +53,6 @@ exports.handler = async (event) => {
       }
     }
 
-    // ✅ Register ONE device per user
     await db.query(
       `
       INSERT INTO public.user_devices (user_id, platform, created_at, updated_at)

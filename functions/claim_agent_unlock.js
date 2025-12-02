@@ -1,5 +1,5 @@
 // functions/claim_agent_unlock.js
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function ok(obj) {
@@ -38,7 +38,6 @@ exports.handler = async (event) => {
     if (!unlockCode || !email || !password || !npn)
       return fail("Unlock code, email, password, and NPN are required.");
 
-    // 1️⃣ Validate unlock code
     const existing = await db.query(
       `SELECT id, active FROM agents WHERE unlock_code = $1`,
       [unlockCode]
@@ -48,14 +47,10 @@ exports.handler = async (event) => {
     const agent = existing.rows[0];
     if (agent.active) return fail("Unlock code already used ❌");
 
-    // 2️⃣ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3️⃣ Generate permanent promo code
     const promoCode =
       "AG-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-    // 4️⃣ Update agent fully (including address now ✅)
     const result = await db.query(
       `UPDATE agents
          SET email = $1,

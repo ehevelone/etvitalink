@@ -1,5 +1,5 @@
 // functions/request_reset.js
-const db = require("../services/db");
+const db = require("./services/db");
 const nodemailer = require("nodemailer");
 
 // ✅ Only load dotenv locally, Netlify already injects env vars

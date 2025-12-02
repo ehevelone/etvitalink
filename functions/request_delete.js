@@ -1,5 +1,5 @@
 // functions/request_delete.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 function ok(msg) {
   return {

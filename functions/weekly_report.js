@@ -1,5 +1,5 @@
 // functions/weekly_report.js
-const db = require("../services/db");  // ✅ corrected path
+const db = require("./services/db");  // ✅ corrected path
 const nodemailer = require("nodemailer");
 
 exports.handler = async () => {

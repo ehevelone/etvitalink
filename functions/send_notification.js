@@ -1,5 +1,5 @@
 // functions/send_notification.js
-const db = require("../services/db");
+const db = require("./services/db");
 const admin = require("firebase-admin");
 
 const serviceAccount = JSON.parse(process.env.FCM_SERVICE_ACCOUNT || "{}");

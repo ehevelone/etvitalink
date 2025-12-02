@@ -1,5 +1,5 @@
 // functions/new_agent_code.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 // ✅ Simple random alphanumeric generator (8 chars, A-Z0-9)
 function generateUnlockCode() {

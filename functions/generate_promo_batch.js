@@ -1,6 +1,6 @@
 // functions/generate_promo_batch.js
 const crypto = require("crypto");
-const db = require("../services/db");
+const db = require("./services/db");
 
 function generateCode(prefix = "PROMO", length = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
