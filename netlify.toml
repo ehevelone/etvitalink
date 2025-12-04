@@ -1,9 +1,42 @@
-[build]
-  command = "echo 'API only – no site build'"
-  publish = ""
+# ============================
+# ✅ Netlify Build Configuration
+# ============================
 
+[build]
+  # ⛔ Prevent Netlify from trying to build Flutter
+  ignore = "exit 0"
+  publish = "."
+  command = "echo 'No frontend build step needed'"
+
+# ============================
+# ✅ Serverless Functions Setup
+# ============================
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  external_node_modules = ["pg", "bcryptjs", "firebase-admin", "nodemailer", "qrcode"]
-  included_files = ["functions/services/**/*.js"]
+
+  external_node_modules = [
+    "pg",
+    "nodemailer",
+    "qrcode",
+    "bcryptjs",
+    "sharp",
+    "twilio"
+  ]
+
+# ============================
+# ✅ Environment Configuration
+# ============================
+[build.environment]
+  NODE_VERSION = "20"
+  SMTP_HOST = "smtp.gmail.com"
+  SMTP_PORT = "587"
+  SMTP_USER = "ehevelone@gmail.com"
+
+# ============================
+# ✅ Local Development Settings
+# ============================
+[dev]
+  functions = "functions"
+  publish = "."
+  port = 8888
