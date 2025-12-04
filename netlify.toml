@@ -1,6 +1,6 @@
 [build]
-  command = "echo 'Skipping Flutter build – API only'"
-  publish = "."
+  command = "echo 'API only – no site build'"
+  publish = ""
 
 [functions]
   directory = "functions"
