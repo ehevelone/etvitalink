@@ -1,9 +1,9 @@
 [build]
-  # No site to build — this is a functions-only deployment
-  publish = "functions"
-  command = ""
+  command = "echo 'Skipping Flutter build – API only'"
+  publish = "."
 
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
-  included_files = ["functions/**"]
+  external_node_modules = ["pg", "bcryptjs", "firebase-admin", "nodemailer", "qrcode"]
+  included_files = ["functions/services/**/*.js"]
