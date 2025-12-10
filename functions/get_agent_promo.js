@@ -1,62 +1,103 @@
 // functions/get_agent_promo.js
 const db = require("./services/db");
 
-function ok(obj) {
+function reply(statusCode, obj) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg, code = 400) {
-  return {
-    statusCode: code,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+    body: JSON.stringify(obj),
   };
 }
 
 exports.handler = async (event) => {
   try {
-    // ✅ Only allow POST requests
-    if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
+    // ✅ Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
+    }
 
-    const { email } = JSON.parse(event.body || "{}");
-    if (!email) return fail("Email required");
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
 
-    // ✅ Query the agents table for this email
+    // ✅ Safe body parsing (Flutter + Netlify)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
+    const { email } = body;
+
+    if (!email) {
+      return reply(400, {
+        success: false,
+        error: "Email required",
+      });
+    }
+
+    // ✅ Lookup agent (case-insensitive)
     const result = await db.query(
-      `SELECT id, name, promo_code, active
-         FROM agents
-        WHERE LOWER(email) = LOWER($1)
-        LIMIT 1`,
-      [email]
+      `
+      SELECT id, name, email, promo_code, active
+      FROM agents
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [email.trim()]
     );
 
-    if (result.rows.length === 0) {
-      return fail("No agent found with that email");
+    if (!result.rows.length) {
+      return reply(404, {
+        success: false,
+        error: "No agent found with that email",
+      });
     }
 
-    const row = result.rows[0];
+    const agent = result.rows[0];
 
-    // ✅ If agent has no promo_code, return cleanly
-    if (!row.promo_code || row.promo_code.trim() === "") {
-      return fail("Agent has no promo code assigned");
+    if (!agent.promo_code || agent.promo_code.trim() === "") {
+      return reply(400, {
+        success: false,
+        error: "Agent has no promo code assigned",
+      });
     }
 
-    // ✅ Return using the same key Flutter expects: 'promoCode'
-    return ok({
-      promoCode: row.promo_code,
-      active: row.active ?? false,
+    // ✅ EXACT response shape Flutter expects
+    return reply(200, {
+      success: true,
+      promoCode: agent.promo_code,
+      active: agent.active ?? false,
       agent: {
-        id: row.id,
-        name: row.name,
-        email: email,
+        id: agent.id,
+        name: agent.name,
+        email: agent.email,
       },
     });
+
   } catch (err) {
     console.error("❌ get_agent_promo error:", err);
-    return fail("Server error: " + err.message, 500);
+    return reply(500, {
+      success: false,
+      error: "Server error while fetching promo code ❌",
+    });
   }
 };

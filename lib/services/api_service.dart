@@ -5,30 +5,38 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
+  /// ✅ Netlify Functions base URL (THIS IS CORRECT)
   static const String _baseUrl =
       "https://vitalink-app.netlify.app/.netlify/functions";
 
+  // -------------------------------------------------------------
+  // 🔧 Internal POST helper
+  // -------------------------------------------------------------
   static Future<Map<String, dynamic>> _postJson(
     String path,
     Map<String, dynamic> body,
   ) async {
     try {
-      debugPrint("📡 POST → $path  BODY: $body");
+      final url = Uri.parse("$_baseUrl/$path");
+
+      debugPrint("📡 POST → $url");
+      debugPrint("📦 BODY → $body");
 
       final res = await http.post(
-        Uri.parse("$_baseUrl/$path"),
-        headers: {"Content-Type": "application/json"},
+        url,
+        headers: const {
+          "Content-Type": "application/json",
+        },
         body: jsonEncode(body),
       );
 
-      debugPrint("🔥 RAW RESPONSE BODY ($path): ${res.body}");
+      debugPrint("📥 STATUS (${path}): ${res.statusCode}");
+      debugPrint("📥 RAW BODY (${path}): ${res.body}");
 
       final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-      debugPrint("📥 PARSED RESPONSE ($path): $decoded");
-
       return decoded;
     } catch (e, st) {
-      debugPrint("❌ $_baseUrl/$path error: $e\n$st");
+      debugPrint("❌ API ERROR ($path): $e\n$st");
       return {"success": false, "error": e.toString()};
     }
   }
@@ -64,7 +72,7 @@ class ApiService {
   }
 
   // -------------------------------------------------------------
-  // 🔹 Agent login — EXACT match check_agent.js
+  // 🔹 Agent login
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> loginAgent({
     required String email,
@@ -89,7 +97,7 @@ class ApiService {
   }
 
   // -------------------------------------------------------------
-  // 🔹 User login — EXACT match check_user.js
+  // 🔹 User login
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> loginUser({
     required String email,
@@ -116,7 +124,7 @@ class ApiService {
   }
 
   // -------------------------------------------------------------
-  // 🔹 PROMO LOOKUP
+  // 🔹 Promo lookup
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> verifyPromo({
     required String username,
@@ -169,25 +177,14 @@ class ApiService {
   }
 
   // -------------------------------------------------------------
-  // 🔥 GET AGENT PROMO CODE — REQUIRED FOR QR
+  // 🔥 Get agent promo code
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> getAgentPromoCode(String email) {
     return _postJson("get_agent_promo", {"email": email});
   }
 
   // -------------------------------------------------------------
-  // 🔹 VERIFY PROMO (BACKUP)
-  // -------------------------------------------------------------
-  static Future<Map<String, dynamic>> verifyPromoCode(
-      String username, String promoCode) {
-    return _postJson("vpc", {
-      "username": username,
-      "promoCode": promoCode,
-    });
-  }
-
-  // -------------------------------------------------------------
-  // 🔹 Register notification device  **FIXED**
+  // 🔹 Register device token
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> registerDeviceToken({
     required String email,
@@ -197,13 +194,13 @@ class ApiService {
     return _postJson("register_device_v2", {
       "email": email,
       "role": role,
-      "deviceToken": fcmToken,   // ⬅ MUST match backend
-      "platform": "android",     // ⬅ backend accepts, useful future-proofing
+      "deviceToken": fcmToken,
+      "platform": "android",
     });
   }
 
   // -------------------------------------------------------------
-  // 🔔 Send broadcast notification
+  // 🔔 Send notification
   // -------------------------------------------------------------
   static Future<Map<String, dynamic>> sendNotification({
     required String agentEmail,
@@ -223,7 +220,7 @@ class ApiService {
     String? agencyAddress,
     String? password,
   }) {
-    final body = <String, dynamic>{
+    final body = {
       "email": email,
       "name": name,
       "phone": phone,
@@ -231,9 +228,7 @@ class ApiService {
       "agency_name": agencyName,
       "agency_address": agencyAddress,
       "password": password,
-    };
-
-    body.removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
+    }..removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
 
     return _postJson("update_agent_profile", body);
   }
@@ -248,15 +243,13 @@ class ApiService {
     String? phone,
     String? password,
   }) {
-    final body = <String, dynamic>{
+    final body = {
       "currentEmail": currentEmail,
       "email": email,
       "name": name,
       "phone": phone,
       "password": password,
-    };
-
-    body.removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
+    }..removeWhere((k, v) => v == null || (v is String && v.trim().isEmpty));
 
     return _postJson("update_user_profile", body);
   }

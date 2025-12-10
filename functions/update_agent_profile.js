@@ -1,29 +1,52 @@
 // functions/update_agent_profile.js
-const db = require("./services/db"); // ✅ your existing DB connection helper
+const db = require("./services/db");
+const bcrypt = require("bcryptjs");
 
-function ok(obj) {
+function reply(statusCode, obj) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg, code = 400) {
-  return {
-    statusCode: code,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+    body: JSON.stringify(obj),
   };
 }
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") {
-      return fail("Only POST allowed", 405);
+    // ✅ CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
     }
 
-    const body = JSON.parse(event.body || "{}");
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
+
+    // ✅ Safe body parsing
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
     const {
       email,
       name,
@@ -31,14 +54,17 @@ exports.handler = async (event) => {
       npn,
       agencyName,
       agencyAddress,
-      password, // ✅ allow password change if provided
+      password,
     } = body;
 
     if (!email) {
-      return fail("Email is required");
+      return reply(400, {
+        success: false,
+        error: "Email is required",
+      });
     }
 
-    // ✅ Build dynamic query for only provided fields
+    // ✅ Build dynamic update
     const updates = [];
     const values = [];
     let idx = 1;
@@ -64,32 +90,56 @@ exports.handler = async (event) => {
       values.push(agencyAddress);
     }
     if (password) {
-      updates.push(`password = crypt($${idx++}, gen_salt('bf'))`);
-      values.push(password);
+      const hashed = await bcrypt.hash(password, 10);
+      updates.push(`password_hash = $${idx++}`);
+      values.push(hashed);
     }
 
-    if (updates.length === 0) {
-      return fail("No fields provided to update");
+    if (!updates.length) {
+      return reply(400, {
+        success: false,
+        error: "No fields provided to update",
+      });
     }
 
-    values.push(email);
+    values.push(email.trim());
 
     const query = `
       UPDATE agents
       SET ${updates.join(", ")}
-      WHERE email = $${idx}
-      RETURNING id, email, name, phone, npn, agency_name, agency_address;
+      WHERE LOWER(email) = LOWER($${idx})
+      RETURNING
+        id,
+        email,
+        name,
+        phone,
+        npn,
+        agency_name,
+        agency_address,
+        active,
+        role;
     `;
 
     const result = await db.query(query, values);
 
     if (!result.rows.length) {
-      return fail("Agent not found", 404);
+      return reply(404, {
+        success: false,
+        error: "Agent not found",
+      });
     }
 
-    return ok({ agent: result.rows[0] });
-  } catch (e) {
-    console.error("❌ update_agent_profile error:", e);
-    return fail("Server error: " + e.message, 500);
+    return reply(200, {
+      success: true,
+      message: "Agent profile updated ✅",
+      agent: result.rows[0],
+    });
+
+  } catch (err) {
+    console.error("❌ update_agent_profile error:", err);
+    return reply(500, {
+      success: false,
+      error: "Server error while updating agent ❌",
+    });
   }
 };

@@ -2,86 +2,144 @@
 const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
-function ok(obj) {
+function reply(statusCode, obj) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg, code = 400) {
-  return {
-    statusCode: code,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+    body: JSON.stringify(obj),
   };
 }
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
-
-    const { emailOrPhone, code, newPassword } = JSON.parse(event.body || "{}");
-    if (!emailOrPhone || !code || !newPassword) {
-      return fail("Missing required fields ❌");
+    // ✅ Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
     }
 
-    // 🔎 Look in agents first, then users
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
+
+    // ✅ Safe body parsing (Flutter + Netlify)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
+    const { emailOrPhone, code, newPassword } = body;
+
+    if (!emailOrPhone || !code || !newPassword) {
+      return reply(400, {
+        success: false,
+        error: "Missing required fields ❌",
+      });
+    }
+
+    // 🔎 Lookup account (case-insensitive)
     let user, table;
+
     const agentRes = await db.query(
-      `SELECT id, email, reset_code, reset_expires FROM agents WHERE email = $1`,
-      [emailOrPhone]
+      `
+      SELECT id, email, reset_code, reset_expires
+      FROM agents
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [emailOrPhone.trim()]
     );
 
-    if (agentRes.rows.length > 0) {
+    if (agentRes.rows.length) {
       user = agentRes.rows[0];
       table = "agents";
     } else {
       const userRes = await db.query(
-        `SELECT id, email, reset_code, reset_expires FROM users WHERE email = $1`,
-        [emailOrPhone]
+        `
+        SELECT id, email, reset_code, reset_expires
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+        `,
+        [emailOrPhone.trim()]
       );
-      if (userRes.rows.length > 0) {
+
+      if (userRes.rows.length) {
         user = userRes.rows[0];
         table = "users";
       }
     }
 
-    if (!user) return fail("No account found for this email ❌", 404);
+    if (!user) {
+      return reply(404, {
+        success: false,
+        error: "No account found for this email ❌",
+      });
+    }
 
-    // ✅ Verify reset code
+    // ✅ Validate reset code
     if (user.reset_code !== code) {
-      return fail("Invalid reset code ❌");
+      return reply(400, {
+        success: false,
+        error: "Invalid reset code ❌",
+      });
     }
 
-    // ✅ Verify not expired
+    // ✅ Validate expiration
     if (!user.reset_expires || new Date(user.reset_expires) < new Date()) {
-      return fail("Reset code expired ❌");
+      return reply(400, {
+        success: false,
+        error: "Reset code expired ❌",
+      });
     }
 
-    // 🔐 Hash the new password
+    // 🔐 Hash new password
     const hashed = await bcrypt.hash(newPassword, 10);
 
-    // ✅ Update password + clear reset_code
+    // ✅ Update password + clear reset fields
     await db.query(
-      `UPDATE ${table}
-       SET password_hash = $1,
-           reset_code = NULL,
-           reset_expires = NULL
-       WHERE id = $2`,
+      `
+      UPDATE ${table}
+      SET password_hash = $1,
+          reset_code = NULL,
+          reset_expires = NULL
+      WHERE id = $2
+      `,
       [hashed, user.id]
     );
 
-    console.log(`✅ Password reset successful for ${user.email} (${table})`);
+    console.log(`✅ Password reset for ${user.email} (${table})`);
 
-    return ok({
-      message: `Password reset successful ✅`,
+    return reply(200, {
+      success: true,
+      message: "Password reset successful ✅",
       role: table,
       email: user.email,
     });
+
   } catch (err) {
-    console.error("❌ Error in reset_password:", err);
-    return fail("Server error during password reset ❌", 500);
+    console.error("❌ reset_password error:", err);
+    return reply(500, {
+      success: false,
+      error: "Server error during password reset ❌",
+    });
   }
 };

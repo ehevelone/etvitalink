@@ -1,50 +1,96 @@
 // functions/register_device_v2.js
 const db = require("./services/db");
 
-function reply(success, obj = {}) {
+function reply(statusCode, obj) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success, ...obj }),
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+    body: JSON.stringify(obj),
   };
 }
 
 exports.handler = async (event) => {
-  console.log("🚀 register_device_v2.js active build v3.2");
+  console.log("🚀 register_device_v2 active");
 
   try {
-    if (event.httpMethod !== "POST") {
-      return reply(false, { error: "Method Not Allowed" });
+    // ✅ CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
     }
 
-    const { email, role, deviceToken, platform } = JSON.parse(event.body || "{}");
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
+
+    // ✅ SAFE body parsing (Flutter + Netlify)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      console.error("❌ Body parse error:", e);
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
+    const { email, role, deviceToken, platform } = body;
 
     if (!email || !deviceToken || !role) {
-      return reply(false, { error: "Missing required fields (email, deviceToken, role)" });
+      return reply(400, {
+        success: false,
+        error: "Missing required fields (email, deviceToken, role)",
+      });
     }
 
-    console.log("📲 register_device incoming:", { email, role, platform });
+    console.log("📲 Device registration:", {
+      email,
+      role,
+      platform,
+      token: deviceToken.slice(0, 10) + "...",
+    });
 
-    // 🔍 Lookup account
+    // ✅ Lookup agent or user
     const lookupQuery =
       role === "agent"
         ? `SELECT id FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`
         : `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`;
 
-    const res = await db.query(lookupQuery, [email]);
-    if (!res.rows.length) return reply(false, { error: `No ${role} found with that email` });
+    const lookup = await db.query(lookupQuery, [email.trim()]);
 
-    const entityId = res.rows[0].id;
+    if (!lookup.rows.length) {
+      return reply(404, {
+        success: false,
+        error: `No ${role} found with that email`,
+      });
+    }
+
+    const entityId = lookup.rows[0].id;
     const idField = role === "agent" ? "agent_id" : "user_id";
 
-    // 🧠 Manual merge (no conflict constraint issues)
+    // ✅ Check for existing device token
     const existing = await db.query(
       `SELECT id FROM user_devices WHERE device_token = $1 LIMIT 1`,
       [deviceToken]
     );
 
     if (existing.rows.length) {
-      // Update
+      // 🔄 Update existing device
       const updated = await db.query(
         `
         UPDATE user_devices
@@ -54,33 +100,41 @@ exports.handler = async (event) => {
         WHERE device_token = $3
         RETURNING id, ${idField}, device_token, platform;
         `,
-        [entityId, platform || null, deviceToken]
+        [entityId, platform || "android", deviceToken]
       );
 
-      console.log("♻️ Updated existing device:", updated.rows[0]);
-      return reply(true, {
+      console.log("♻️ Device updated:", updated.rows[0]);
+
+      return reply(200, {
+        success: true,
         message: `Device updated for ${role} ♻️`,
         device: updated.rows[0],
       });
-    } else {
-      // Insert
-      const inserted = await db.query(
-        `
-        INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
-        VALUES ($1, $2, $3, NOW(), NOW())
-        RETURNING id, ${idField}, device_token, platform;
-        `,
-        [entityId, deviceToken, platform || null]
-      );
-
-      console.log("✅ New device added:", inserted.rows[0]);
-      return reply(true, {
-        message: `Device registered for ${role} ✅`,
-        device: inserted.rows[0],
-      });
     }
+
+    // ✅ Insert new device
+    const inserted = await db.query(
+      `
+      INSERT INTO user_devices (${idField}, device_token, platform, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id, ${idField}, device_token, platform;
+      `,
+      [entityId, deviceToken, platform || "android"]
+    );
+
+    console.log("✅ New device registered:", inserted.rows[0]);
+
+    return reply(200, {
+      success: true,
+      message: `Device registered for ${role} ✅`,
+      device: inserted.rows[0],
+    });
+
   } catch (err) {
     console.error("❌ register_device_v2 error:", err);
-    return reply(false, { error: "Server error: " + err.message });
+    return reply(500, {
+      success: false,
+      error: "Server error while registering device ❌",
+    });
   }
 };

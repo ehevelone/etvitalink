@@ -2,60 +2,88 @@
 const db = require("./services/db");
 const nodemailer = require("nodemailer");
 
-function ok(obj) {
+function reply(statusCode, obj) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg, code = 400) {
-  return {
-    statusCode: code,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+    body: JSON.stringify(obj),
   };
 }
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") {
-      return fail("Method not allowed", 405);
+    // ✅ Handle preflight (important for mobile / WebView)
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
     }
 
-    const { emailOrPhone } = JSON.parse(event.body || "{}");
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
+
+    // ✅ Safe body parsing (Netlify + Flutter)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
+    const { emailOrPhone } = body;
     if (!emailOrPhone) {
-      return fail("Email is required ❌");
+      return reply(400, {
+        success: false,
+        error: "Email is required ❌",
+      });
     }
 
     // 🔢 Generate 6-digit reset code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 🔎 Find account
+    // 🔎 Locate account (case-insensitive)
     let user, table;
 
     const agentRes = await db.query(
-      "SELECT id, email FROM agents WHERE email = $1",
-      [emailOrPhone]
+      `SELECT id, email FROM agents WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [emailOrPhone.trim()]
     );
 
-    if (agentRes.rows.length > 0) {
+    if (agentRes.rows.length) {
       user = agentRes.rows[0];
       table = "agents";
     } else {
       const userRes = await db.query(
-        "SELECT id, email FROM users WHERE email = $1",
-        [emailOrPhone]
+        `SELECT id, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+        [emailOrPhone.trim()]
       );
-      if (userRes.rows.length > 0) {
+      if (userRes.rows.length) {
         user = userRes.rows[0];
         table = "users";
       }
     }
 
     if (!user) {
-      return fail("No account found for this email ❌", 404);
+      return reply(404, {
+        success: false,
+        error: "No account found for this email ❌",
+      });
     }
 
     // 🕒 Store reset code
@@ -69,7 +97,7 @@ exports.handler = async (event) => {
       [user.id, resetCode]
     );
 
-    // 📧 Email setup
+    // 📧 Mail transport
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -85,37 +113,42 @@ exports.handler = async (event) => {
         ? "VitaLink Agent Password Reset Code"
         : "VitaLink User Password Reset Code";
 
-    const mailBody = `
+    const message = `
 Hi,
 
 Your VitaLink password reset code is:
 
 ${resetCode}
 
-This code will expire in 20 minutes.
+This code expires in 20 minutes.
 
-If you did not request this, you may ignore this email.
+If you did not request this, ignore this email.
 
 – VitaLink Support
-    `.trim();
+`.trim();
 
     await transporter.sendMail({
       from: `"VitaLink Support" <${process.env.SMTP_USER}>`,
       to: user.email,
       subject,
-      text: mailBody,
+      text: message,
     });
 
     console.log(`✅ Reset code sent to ${user.email} (${table})`);
 
-    return ok({
+    return reply(200, {
+      success: true,
       message: "Reset code sent successfully ✅",
       expiresIn: "20 minutes",
       sentTo: user.email,
       role: table,
     });
+
   } catch (err) {
     console.error("❌ request_reset error:", err);
-    return fail("Server error while sending reset code ❌", 500);
+    return reply(500, {
+      success: false,
+      error: "Server error while sending reset code ❌",
+    });
   }
 };

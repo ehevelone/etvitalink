@@ -1,9 +1,22 @@
-// functions/generateAgentUnlock.js
-const db = require("./services/db");  // ✅ corrected path
+// functions/generate_agent_unlock.js
+const db = require("./services/db");
 const crypto = require("crypto");
 
-function generateUnlockCode(prefix = "AG", length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid 0/O, 1/I
+function reply(statusCode, obj) {
+  return {
+    statusCode,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+    body: JSON.stringify(obj),
+  };
+}
+
+function generateUnlockCode(prefix = "AG", length = 8) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < length; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -13,41 +26,82 @@ function generateUnlockCode(prefix = "AG", length = 10) {
 
 exports.handler = async (event) => {
   try {
-    // ✅ Verify master key
-    const { masterKey } = JSON.parse(event.body || "{}");
-    if (masterKey !== process.env.MASTER_AGENT_KEY) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({ success: false, error: "Unauthorized request" }),
-      };
+    // ✅ CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return reply(200, {});
     }
 
-    // ✅ Generate secure unlock code
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, {
+        success: false,
+        error: "Method Not Allowed",
+      });
+    }
+
+    // ✅ Safe body parsing
+    let body = {};
+    try {
+      body = event.isBase64Encoded
+        ? JSON.parse(Buffer.from(event.body, "base64").toString("utf8"))
+        : JSON.parse(event.body || "{}");
+    } catch {
+      return reply(400, {
+        success: false,
+        error: "Invalid request body",
+      });
+    }
+
+    const { masterKey } = body;
+
+    // ✅ Verify master key
+    if (!masterKey || masterKey !== process.env.MASTER_AGENT_KEY) {
+      return reply(403, {
+        success: false,
+        error: "Unauthorized request",
+      });
+    }
+
+    // ✅ Generate unlock code
     const unlockCode = generateUnlockCode();
 
-    // ✅ Insert placeholder agent row
+    // ✅ Insert placeholder agent
     const result = await db.query(
-      `INSERT INTO agents (email, password, role, active, npn, unlock_code, created_at)
-       VALUES (NULL, NULL, 'agent', FALSE, NULL, $1, NOW())
-       RETURNING id, unlock_code`,
+      `
+      INSERT INTO agents (
+        email,
+        password_hash,
+        role,
+        active,
+        npn,
+        unlock_code,
+        created_at
+      )
+      VALUES (
+        NULL,
+        NULL,
+        'agent',
+        FALSE,
+        NULL,
+        $1,
+        NOW()
+      )
+      RETURNING id, unlock_code;
+      `,
       [unlockCode]
     );
 
-    const agentId = result.rows[0].id;
+    return reply(200, {
+      success: true,
+      agentId: result.rows[0].id,
+      unlockCode: result.rows[0].unlock_code,
+    });
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        agentId,
-        unlockCode,
-      }),
-    };
   } catch (err) {
-    console.error("❌ Error generating agent unlock:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: "Server error" }),
-    };
+    console.error("❌ generate_agent_unlock error:", err);
+    return reply(500, {
+      success: false,
+      error: "Server error generating agent unlock ❌",
+    });
   }
 };

@@ -1,45 +1,72 @@
-import OpenAI from "openai";
+// functions/parse_insurance.js
+const OpenAI = require("openai");
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// ✅ OpenAI client
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-export default async (req) => {
+function reply(statusCode, obj) {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj),
+  };
+}
+
+exports.handler = async (event) => {
   try {
-    // ✅ Get raw body
-    const raw = await req.text();
-    let body = {};
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body", received: raw }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    // ✅ Enforce POST
+    if (event.httpMethod !== "POST") {
+      return reply(405, { success: false, error: "Method Not Allowed" });
     }
 
-    // ✅ Ensure we have image input
+    // ✅ Safe body parsing (mobile + Netlify)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      return reply(400, {
+        success: false,
+        error: "Invalid JSON body",
+      });
+    }
+
+    // ✅ Validate image input
     let imageInput;
     if (body.imageUrl) {
-      imageInput = { type: "image_url", image_url: { url: body.imageUrl } };
+      imageInput = {
+        type: "image_url",
+        image_url: { url: body.imageUrl },
+      };
     } else if (body.imageBase64) {
       imageInput = {
         type: "image_url",
-        image_url: { url: `data:image/png;base64,${body.imageBase64}` },
+        image_url: {
+          url: `data:image/png;base64,${body.imageBase64}`,
+        },
       };
     } else {
-      return new Response(
-        JSON.stringify({ error: "No image provided (need imageUrl or imageBase64)" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return reply(400, {
+        success: false,
+        error: "No image provided (imageUrl or imageBase64 required)",
+      });
     }
 
-    // ✅ Call OpenAI Vision model
+    // ✅ Call OpenAI Vision
     const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // Vision-capable
+      model: "gpt-4.1-mini",
       messages: [
         {
           role: "system",
-          content: `You are an assistant that extracts structured insurance information from an insurance card.
-Output strictly JSON with keys: carrier, policy, memberId, group.`,
+          content:
+            "You extract structured insurance data. Respond ONLY with valid JSON having keys: carrier, policy, memberId, group.",
         },
         {
           role: "user",
@@ -52,26 +79,27 @@ Output strictly JSON with keys: carrier, policy, memberId, group.`,
       max_tokens: 500,
     });
 
-    // ✅ Parse AI response
     const rawContent = response.choices[0].message.content;
+
+    // ✅ Try to parse AI output
     let parsed;
     try {
       parsed = JSON.parse(rawContent);
     } catch {
-      parsed = { rawText: rawContent }; // fallback
+      parsed = { rawText: rawContent };
     }
 
-    return new Response(JSON.stringify({ data: parsed }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+    return reply(200, {
+      success: true,
+      data: parsed,
     });
+
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: err.message,
-        details: err.response?.data || null,
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    console.error("❌ parse_insurance error:", err);
+    return reply(500, {
+      success: false,
+      error: "Server error",
+      details: err.message,
+    });
   }
 };

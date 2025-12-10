@@ -1,4 +1,20 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive",
-    "java.compile.nullAnalysis.mode": "automatic"
+  // Disable Java tooling on Android folder
+  "java.import.gradle.enabled": false,
+  "java.import.gradle.wrapper.enabled": false,
+  "java.import.maven.enabled": false,
+  "java.autobuild.enabled": false,
+  "java.configuration.checkProjectSettingsExclusions": false,
+  "java.project.explorer.showDependencies": false,
+  "java.compile.nullAnalysis.mode": "automatic",
+
+  // Prevent VS Code from scanning Android internals
+  "files.watcherExclude": {
+    "**/android/**": true
+  },
+
+  "files.exclude": {
+    "**/android/.gradle": true,
+    "**/android/.idea": true
+  }
 }
