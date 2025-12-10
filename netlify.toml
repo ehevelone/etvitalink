@@ -4,18 +4,21 @@
 
 [build]
   # ⛔ Prevent Netlify from trying to build Flutter
-  ignore = "exit 0"
-  publish = "."
   command = "echo 'No frontend build step needed'"
+  publish = "."
+  ignore = "exit 0"
 
 # ============================
 # ✅ Serverless Functions Setup
 # ============================
+
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
 
+  # ✅ REQUIRED: Externalize native & large deps
   external_node_modules = [
+    "firebase-admin",
     "pg",
     "nodemailer",
     "qrcode",
@@ -27,6 +30,7 @@
 # ============================
 # ✅ Environment Configuration
 # ============================
+
 [build.environment]
   NODE_VERSION = "20"
   SMTP_HOST = "smtp.gmail.com"
@@ -36,6 +40,7 @@
 # ============================
 # ✅ Local Development Settings
 # ============================
+
 [dev]
   functions = "functions"
   publish = "."
