@@ -1,27 +1,63 @@
 // functions/check_user.js
+// ✅ Netlify + Android + iOS safe
+
 const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
-function reply(success, obj = {}) {
+const headers = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function reply(success, obj = {}, code = 200) {
   return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
+    statusCode: code,
+    headers,
     body: JSON.stringify({ success, ...obj }),
   };
 }
 
 exports.handler = async (event) => {
   try {
+    // ✅ HANDLE PREFLIGHT (THIS WAS MISSING)
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 200,
+        headers,
+        body: "",
+      };
+    }
+
     if (event.httpMethod !== "POST") {
-      return reply(false, { error: "Method Not Allowed" });
+      return reply(false, { error: "Method Not Allowed" }, 405);
     }
 
-    const { email, password, platform } = JSON.parse(event.body || "{}");
+    // ✅ SAFE BODY PARSING
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      console.error("❌ Body parse error:", e);
+      return reply(false, { error: "Invalid request body" }, 400);
+    }
+
+    const { email, password, platform } = body;
+
     if (!email || !password) {
-      return reply(false, { error: "Email and password required" });
+      return reply(false, {
+        error: "Email and password required",
+        received: body, // ✅ TEMP DEBUG
+      });
     }
 
-    // ✅ Lookup user (explicit schema)
     const result = await db.query(
       `
       SELECT id, first_name, last_name, email, password_hash, agent_id, purchase_code
@@ -29,7 +65,7 @@ exports.handler = async (event) => {
       WHERE LOWER(email) = LOWER($1)
       LIMIT 1
       `,
-      [email]
+      [email.trim()]
     );
 
     if (!result.rows.length) {
@@ -38,13 +74,12 @@ exports.handler = async (event) => {
 
     const user = result.rows[0];
 
-    // ✅ Verify password
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
       return reply(false, { error: "Invalid password ❌" });
     }
 
-    // ✅ Verify user access based on agent subscription
+    // ✅ Verify agent subscription
     if (user.agent_id) {
       const agentCheck = await db.query(
         `SELECT subscription_valid FROM public.agents WHERE id = $1 LIMIT 1`,
@@ -52,11 +87,13 @@ exports.handler = async (event) => {
       );
 
       if (!agentCheck.rows.length || !agentCheck.rows[0].subscription_valid) {
-        return reply(false, { error: "Account inactive — contact agent" });
+        return reply(false, {
+          error: "Account inactive — contact agent",
+        });
       }
     }
 
-    // ✅ Register ONE device per user
+    // ✅ Register device
     await db.query(
       `
       INSERT INTO public.user_devices (user_id, platform, created_at, updated_at)
@@ -75,12 +112,12 @@ exports.handler = async (event) => {
         firstName: user.first_name,
         lastName: user.last_name,
         agent_id: user.agent_id,
-        purchase_code: user.purchase_code
+        purchase_code: user.purchase_code,
       },
     });
 
   } catch (err) {
     console.error("❌ check_user error:", err);
-    return reply(false, { error: "Server error: " + err.message });
+    return reply(false, { error: "Server error" }, 500);
   }
 };
