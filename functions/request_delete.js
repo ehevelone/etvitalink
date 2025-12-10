@@ -19,7 +19,19 @@ function fail(msg, code = 400) {
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
+    if (event.httpMethod === "OPTIONS") {
+  return {
+    statusCode: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+    body: "",
+  };
+}
+
+if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
     const { username, email } = JSON.parse(event.body || "{}");
     if (!username && !email) {

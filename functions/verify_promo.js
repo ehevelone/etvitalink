@@ -19,7 +19,19 @@ function fail(msg, code = 400) {
 exports.handler = async (event) => {
   try {
     // ✅ METHOD GUARD (THIS WAS MISSING)
-    if (event.httpMethod !== "POST") {
+    if (event.httpMethod === "OPTIONS") {
+  return {
+    statusCode: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+    body: "",
+  };
+}
+
+if (event.httpMethod !== "POST") {
       return fail("Method Not Allowed", 405);
     }
 
