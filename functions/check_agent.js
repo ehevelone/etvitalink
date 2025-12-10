@@ -1,68 +1,84 @@
 // functions/check_agent.js
-// 🚀 Updated 2025-10-16 with case-insensitive email match + safer handling
+// ✅ Netlify + Mobile SAFE version (base64-aware)
 
 const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
-function ok(obj) {
-  return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: true, ...obj }),
-  };
-}
-
-function fail(msg, code = 400) {
+function reply(success, obj = {}, code = 200) {
   return {
     statusCode: code,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ success: false, error: msg }),
+    body: JSON.stringify({ success, ...obj }),
   };
 }
 
 exports.handler = async (event) => {
   try {
-    const { email, password } = JSON.parse(event.body || "{}");
-    console.log("🔍 Incoming agent login attempt:", { email });
-
-    if (!email || !password) {
-      return fail("Missing email or password.");
+    if (event.httpMethod !== "POST") {
+      return reply(false, { error: "Method Not Allowed" }, 405);
     }
 
-    // ✅ Case-insensitive email lookup
+    // ✅ SAFE BODY PARSING (REQUIRED FOR FLUTTER)
+    let body = {};
+    try {
+      if (event.isBase64Encoded) {
+        body = JSON.parse(
+          Buffer.from(event.body, "base64").toString("utf8")
+        );
+      } else {
+        body = JSON.parse(event.body || "{}");
+      }
+    } catch (e) {
+      console.error("❌ Body parse error:", e);
+      return reply(false, { error: "Invalid request body" }, 400);
+    }
+
+    const { email, password } = body;
+    console.log("🔍 Incoming agent login:", { email });
+
+    if (!email || !password) {
+      return reply(false, {
+        error: "Missing email or password.",
+        received: body, // 🔍 TEMP DEBUG (remove later)
+      });
+    }
+
+    // ✅ Case-insensitive lookup
     const result = await db.query(
-      "SELECT * FROM agents WHERE LOWER(email) = LOWER($1)",
+      `
+      SELECT id, email, name, phone, npn, role, active, password_hash
+      FROM public.agents
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
       [email.trim()]
     );
-    console.log("🔍 DB result count:", result.rows.length);
 
     if (!result.rows.length) {
-      return fail("No account found with this email.");
+      return reply(false, { error: "No account found with this email." });
     }
 
     const agent = result.rows[0];
-    console.log("🔍 Agent ID:", agent.id, "Active:", agent.active);
 
-    // ✅ Handle missing password_hash gracefully
     if (!agent.password_hash) {
-      console.error("❌ No password hash found for agent:", agent.id);
-      return fail("Agent account not set up correctly. Contact support.");
+      console.error("❌ Missing password hash for agent:", agent.id);
+      return reply(false, {
+        error: "Agent account not set up correctly. Contact support.",
+      });
     }
 
-    // ✅ Compare password
+    // ✅ Verify password
     const isMatch = await bcrypt.compare(password, agent.password_hash);
-    console.log("🔑 Compare result:", isMatch);
-
     if (!isMatch) {
-      return fail("Invalid password ❌");
+      return reply(false, { error: "Invalid password ❌" });
     }
 
     if (!agent.active) {
-      return fail("This account has been disabled.");
+      return reply(false, { error: "This account has been disabled." });
     }
 
-    // ✅ Return clean agent object (no password hash ever sent back)
-    return ok({
+    // ✅ SUCCESS
+    return reply(true, {
       message: "Agent login successful ✅",
       agent: {
         id: agent.id,
@@ -74,15 +90,9 @@ exports.handler = async (event) => {
         active: agent.active,
       },
     });
+
   } catch (err) {
-    console.error("❌ check_agent error:", err);
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        success: false,
-        error: "Server error: " + err.message,
-      }),
-    };
+    console.error("❌ check_agent fatal error:", err);
+    return reply(false, { error: "Server error" }, 500);
   }
 };
