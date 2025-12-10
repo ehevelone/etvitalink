@@ -1,5 +1,5 @@
 // functions/generateAgentQR.js
-const db = require("../services/db");
+const db = require("./services/db");
 const QRCode = require("qrcode");
 const crypto = require("crypto");
 

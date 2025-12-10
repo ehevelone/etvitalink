@@ -1,5 +1,5 @@
 // functions/cleanup_devices.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 function reply(success, obj = {}) {
   return {

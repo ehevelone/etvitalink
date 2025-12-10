@@ -1,5 +1,5 @@
 // functions/update_user_profile.js
-const db = require("../services/db"); // your existing DB helper
+const db = require("./services/db"); // your existing DB helper
 
 function ok(obj) {
   return {

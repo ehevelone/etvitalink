@@ -1,5 +1,5 @@
 // functions/check_user.js
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function reply(success, obj = {}) {

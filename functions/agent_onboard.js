@@ -1,5 +1,5 @@
 // functions/agent_onboard.js
-const db = require("../services/db");
+const db = require("./services/db");
 const crypto = require("crypto");
 
 // 🔹 Utility to generate a random unlock code (prefix AG-XXXXXXX)

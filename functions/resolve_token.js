@@ -1,5 +1,5 @@
 // functions/resolve_token.js
-const db = require("../services/db");
+const db = require("./services/db");
 
 /**
  * This endpoint resolves a secure onboarding token (from the URL)

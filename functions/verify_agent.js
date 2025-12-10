@@ -1,4 +1,4 @@
-const db = require("../services/db"); // fixed path
+const db = require("./services/db"); // fixed path
 
 function ok(obj) {
   return {

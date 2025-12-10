@@ -1,5 +1,5 @@
 // functions/reset_password.js
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function ok(obj) {

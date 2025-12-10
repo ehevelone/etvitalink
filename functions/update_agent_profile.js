@@ -1,5 +1,5 @@
 // functions/update_agent_profile.js
-const db = require("../services/db"); // ✅ your existing DB connection helper
+const db = require("./services/db"); // ✅ your existing DB connection helper
 
 function ok(obj) {
   return {

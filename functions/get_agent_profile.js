@@ -1,5 +1,5 @@
 // functions/get_agent_profile.js
-const db = require("../services/db"); // your pg client wrapper
+const db = require("./services/db"); // your pg client wrapper
 
 function ok(obj) {
   return {

@@ -1,5 +1,5 @@
 // functions/generateAgentUnlock.js
-const db = require("../services/db");  // ✅ corrected path
+const db = require("./services/db");  // ✅ corrected path
 const crypto = require("crypto");
 
 function generateUnlockCode(prefix = "AG", length = 10) {

@@ -1,5 +1,5 @@
 const nodemailer = require("nodemailer");
-const db = require("../services/db"); // ✅ Add DB
+const db = require("./services/db"); // ✅ Add DB
 
 exports.handler = async (event) => {
   try {

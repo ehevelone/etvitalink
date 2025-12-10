@@ -1,7 +1,7 @@
 // functions/check_agent.js
 // 🚀 Updated 2025-10-16 with case-insensitive email match + safer handling
 
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function ok(obj) {

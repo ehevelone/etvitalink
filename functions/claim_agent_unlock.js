@@ -1,5 +1,5 @@
 // functions/claim_agent_unlock.js
-const db = require("../services/db");
+const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
 function ok(obj) {
