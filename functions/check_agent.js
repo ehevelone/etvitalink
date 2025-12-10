@@ -1,24 +1,40 @@
 // functions/check_agent.js
-// ✅ Netlify + Mobile SAFE version (base64-aware)
+// ✅ Mobile-safe + CORS-safe + base64-safe
 
 const db = require("./services/db");
 const bcrypt = require("bcryptjs");
 
+const headers = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function reply(success, obj = {}, code = 200) {
   return {
     statusCode: code,
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ success, ...obj }),
   };
 }
 
 exports.handler = async (event) => {
   try {
+    // ✅ HANDLE PREFLIGHT
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 200,
+        headers,
+        body: "",
+      };
+    }
+
     if (event.httpMethod !== "POST") {
       return reply(false, { error: "Method Not Allowed" }, 405);
     }
 
-    // ✅ SAFE BODY PARSING (REQUIRED FOR FLUTTER)
+    // ✅ SAFE BODY PARSING
     let body = {};
     try {
       if (event.isBase64Encoded) {
@@ -34,16 +50,13 @@ exports.handler = async (event) => {
     }
 
     const { email, password } = body;
-    console.log("🔍 Incoming agent login:", { email });
+    console.log("🔍 Agent login attempt:", email);
 
     if (!email || !password) {
-      return reply(false, {
-        error: "Missing email or password.",
-        received: body, // 🔍 TEMP DEBUG (remove later)
-      });
+      return reply(false, { error: "Missing email or password." });
     }
 
-    // ✅ Case-insensitive lookup
+    // ✅ Lookup agent (case-insensitive)
     const result = await db.query(
       `
       SELECT id, email, name, phone, npn, role, active, password_hash
@@ -61,13 +74,11 @@ exports.handler = async (event) => {
     const agent = result.rows[0];
 
     if (!agent.password_hash) {
-      console.error("❌ Missing password hash for agent:", agent.id);
       return reply(false, {
-        error: "Agent account not set up correctly. Contact support.",
+        error: "Agent account not set up correctly.",
       });
     }
 
-    // ✅ Verify password
     const isMatch = await bcrypt.compare(password, agent.password_hash);
     if (!isMatch) {
       return reply(false, { error: "Invalid password ❌" });
@@ -83,16 +94,16 @@ exports.handler = async (event) => {
       agent: {
         id: agent.id,
         email: agent.email,
-        name: agent.name || null,
-        phone: agent.phone || null,
-        npn: agent.npn || null,
+        name: agent.name,
+        phone: agent.phone,
+        npn: agent.npn,
         role: agent.role || "agent",
         active: agent.active,
       },
     });
 
   } catch (err) {
-    console.error("❌ check_agent fatal error:", err);
+    console.error("❌ check_agent error:", err);
     return reply(false, { error: "Server error" }, 500);
   }
 };
